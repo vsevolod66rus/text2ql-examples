@@ -12,4 +12,6 @@ object ServerError {
   }
 
   final case class ServerErrorWithMessage(message: String) extends ServerError
+
+  final case class TypeDBQueryException(cause: Throwable) extends Throwable
 }

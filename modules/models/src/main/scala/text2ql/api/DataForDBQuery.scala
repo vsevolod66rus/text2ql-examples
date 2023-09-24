@@ -61,6 +61,11 @@ case class ThingWithOriginalName(
     thingName: String
 )
 
+case class ExtractedDataForAggregation(
+    aggregationValue: String,
+    headlineValue: String
+)
+
 sealed trait AttributePriority extends Product with Serializable
 
 case class GeneralizingEntityHeadlinePriority(priorityLevel: Int = 1, sort: Int) extends AttributePriority

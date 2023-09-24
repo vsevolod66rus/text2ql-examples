@@ -2,6 +2,8 @@ ThisBuild / version := "0.1.0-SNAPSHOT"
 
 ThisBuild / scalaVersion := "2.13.12"
 
+ThisBuild / resolvers ++= Dependencies.Resolvers.resolvers
+
 lazy val commonSettings = Seq(
   addCompilerPlugin(Dependencies.kindProjector),
   addCompilerPlugin(Dependencies.betterMonadicFor),
@@ -40,7 +42,9 @@ lazy val app = (project in file("text2ql"))
   .settings(
     name := "text2ql-app",
     libraryDependencies += Dependencies.logback,
-    libraryDependencies += Dependencies.jclOverSlf4j
+    libraryDependencies += Dependencies.jclOverSlf4j,
+    libraryDependencies += Dependencies.typeDB,
+    libraryDependencies += Dependencies.catsRetry,
   )
   .settings(
     excludeDependencies ++= Seq(

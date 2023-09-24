@@ -22,7 +22,7 @@ object App extends WSApp[ApplicationConfig] {
     utm                 <- UnloggedTableManager[F](domainSchema, xaStorage)
     _                   <- QueryBuilder[F](domainSchema, utm, conf.database.data) //qb
     qm                  <- QueryManager[F](xaStorage)
-    domainSchemaChecker <- DomainSchemaChecker[F](qm, utm, conf.database.data)
+    domainSchemaChecker <- DomainSchemaChecker[F](qm, utm, conf.database.data, conf.typeDB)
     controller          <- DomainSchemaController[F](domainSchema, domainSchemaChecker)
   } yield WebService[F](
     Seq(controller),
