@@ -106,3 +106,21 @@ job_function sub entity,
     owns id,
     owns code,
     owns name;
+
+
+match $department isa department, has id $id;$employee isa employee ,has department_id = $id;
+insert $department_employees(department_role: $department, employee_role: $employee) isa department_employees;
+
+
+match $employee isa employee, has id $employee_id ,has name $employee_name; get $employee,$employee_id, $employee_name;sort $employee_id asc; offset 0; limit 10;
+
+define
+
+rule transitive-reachability:
+    when {
+        $department isa department, has id $id;
+        $employee isa employee ,has department_id = $id;
+    } then {
+        (department_role: $department, employee_role: $employee) isa department_employees;
+    };
+

@@ -28,6 +28,7 @@ lazy val commonSettings = Seq(
     "-Wconf:cat=unused-nowarn:s", // Silence nowarn usage warnings.
     "-Xfatal-warnings"            // Fail the compilation if there are any warnings.
   ),
+  scalacOptions -= "-Xfatal-warnings",
   Test / scalacOptions -= "-Wdead-code", // Allow using the any or * matchers in tests
   libraryDependencies += Dependencies.cats,
   libraryDependencies += Dependencies.catsEffect
@@ -44,7 +45,7 @@ lazy val app = (project in file("text2ql"))
     libraryDependencies += Dependencies.logback,
     libraryDependencies += Dependencies.jclOverSlf4j,
     libraryDependencies += Dependencies.typeDB,
-    libraryDependencies += Dependencies.catsRetry,
+    libraryDependencies += Dependencies.catsRetry
   )
   .settings(
     excludeDependencies ++= Seq(

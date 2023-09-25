@@ -23,3 +23,38 @@ case class Region(
     code: String,
     name: String
 ) extends HrEntity
+
+case class City(
+    id: UUID,
+    regionId: UUID,
+    code: String,
+    name: String
+) extends HrEntity
+
+case class Location(
+    id: UUID,
+    cityId: UUID,
+    code: String,
+    name: String
+) extends HrEntity
+
+case class Department(
+    id: UUID,
+    locationId: UUID,
+    code: String,
+    name: String,
+    path: String
+) extends HrEntity
+
+case class Job(
+    id: UUID,
+    functionId: UUID,
+    code: String,
+    name: String
+) extends HrEntity
+
+case class JobFunction(
+    id: UUID,
+    code: String,
+    name: String
+) extends HrEntity

@@ -9,6 +9,7 @@ import fs2.Stream
 import org.typelevel.log4cats.Logger
 import text2ql.api._
 import text2ql.configs.TypeDBConfig
+import text2ql.error.ServerError.{ServerErrorWithMessage, TypeDBQueryException}
 
 import scala.jdk.CollectionConverters._
 import scala.util.Try
@@ -108,8 +109,10 @@ final class TypeDBQueryManagerImpl[F[_]: Sync: Logger](
         query <- queryBuilder.build(queryData, logic, unlimitedQuery = false, conf.limit, domain)
         _     <- Logger[F].info(s"Try typeDB query: $query")
 
-        getQuery    = TypeQL.parseQuery[TypeQLMatch](query)
-        queryResult = readTransaction.query().`match`(getQuery).iterator().asScala.toSeq
+        getQuery        = TypeQL.parseQuery[TypeQLMatch](query)
+        queryResultOpt <-
+          Sync[F].delay(Try(readTransaction.query().`match`(getQuery).iterator().asScala.toSeq).toOption)
+        queryResult    <- Sync[F].fromOption(queryResultOpt, ServerErrorWithMessage("no result: query error"))
 
         page    = queryData.pagination.flatMap(_.page).getOrElse(0)
         perPage = queryData.pagination.flatMap(_.perPage).getOrElse(conf.limit)
@@ -233,7 +236,8 @@ final class TypeDBQueryManagerImpl[F[_]: Sync: Logger](
   ): F[CountQueryDTO] = for {
     typeQLQuery <- Sync[F]
                      .delay(TypeQL.parseQuery[TypeQLMatch.Aggregate](query))
-    count       <- Sync[F].delay(Try(readTransaction.query.`match`(typeQLQuery).get().asLong()).toOption.getOrElse(0L))
+    countOpt    <- Sync[F].delay(Try(readTransaction.query.`match`(typeQLQuery).get().asLong()).toOption)
+    count       <- Sync[F].fromOption(countOpt, ServerErrorWithMessage("no result: count query error"))
     countDTO     = CountQueryDTO(
                      hash = hash,
                      domain = domain,

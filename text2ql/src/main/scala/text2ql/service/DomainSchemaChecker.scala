@@ -162,15 +162,23 @@ class DomainSchemaCheckerImpl[F[+_]: Async](
   private def askQueriesTypeDB(queryDataList: List[DataForDBQuery]): F[List[CheckDomainSchemaResponse]] =
     queryDataList.traverse { queryData =>
       for {
-        constantSqlChunk <- qb.buildConstantSqlChunk(queryData)
-        buildQueryDTO    <- qb.buildGeneralSqlQuery(queryData, constantSqlChunk)
-        res              <-
+        resp     <-
           askRepoTypeDB
             .generalTypeDBQueryWithPermitAndRetry(queryData)
             .attempt
-            .map(_.map(_.custom.flatMap(_.grid).getOrElse(GridWithDataRenderTypeResponseModel())).leftMap(_.toString))
-        entities          = queryData.entityList.map(_.entityName)
-        relations         = queryData.relationList.map(_.relationName)
-      } yield CheckDomainSchemaResponse(entities, relations, buildQueryDTO, res)
+        res       = resp.map(_.custom.flatMap(_.grid).getOrElse(GridWithDataRenderTypeResponseModel())).leftMap(_.toString)
+        entities  = queryData.entityList.map(_.entityName)
+        relations = queryData.relationList.map(_.relationName)
+      } yield CheckDomainSchemaResponse(
+        entities,
+        relations,
+        BuildQueryDTO(
+          generalQuery = resp.toOption.flatMap(_.query).getOrElse(""),
+          countQuery = resp.toOption.map(_.count.query).getOrElse(""),
+          aggregation = false,
+          numericDescriptionQuery = None
+        ),
+        res
+      )
     }
 }

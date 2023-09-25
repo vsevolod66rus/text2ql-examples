@@ -56,8 +56,8 @@ class ActionServerTypeDBRepoImpl[F[+_]: Async: Logger](
       semaphore.count.flatMap(c => Logger[F].info(s"typeDB semaphore count = $c, query = general")) >>
         Async[F].guarantee(
           queryManager
-            .generalQuery(queryData, queryData.logic, queryData.domain)
-            .adaptError(TypeDBQueryException(_)),
+            .generalQuery(queryData, queryData.logic, queryData.domain),
+//            .adaptError(TypeDBQueryException(_)),
           semaphore.release
         ),
       Async[F].raiseError(TypeDBConnectionsLimitExceeded)
@@ -111,6 +111,7 @@ class ActionServerTypeDBRepoImpl[F[+_]: Async: Logger](
 
   private def checkRetryError(err: Throwable): F[Boolean] = Async[F].pure {
     err match {
+      case e if e.getMessage == null                                     => false
       case TypeDBConnectionsLimitExceeded                                => true
       case e if e.toString.contains("Invalid Session Operation")         => true
       case e if e.getMessage.contains("The session has been closed")     => true
