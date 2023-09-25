@@ -2,7 +2,6 @@ package text2ql.service
 
 import cats.effect.{Async, Resource}
 import cats.implicits._
-import com.vaticle.typedb.client.TypeDB
 import fs2.{Stream, text}
 import org.typelevel.log4cats.Logger
 import text2ql.{QueryBuilder, QueryManager, UnloggedTableManager}
@@ -41,6 +40,7 @@ object DomainSchemaChecker {
       qm: QueryManager[F],
       utm: UnloggedTableManager[F],
       conf: DBDataConfig,
+      typeDBTransactionManager: TypeDBTransactionManager[F],
       typeDBConf: TypeDBConfig
   ): Resource[F, DomainSchemaChecker[F]] = for {
     domainSchemaServ      <- DomainSchemaService[F]
@@ -52,11 +52,9 @@ object DomainSchemaChecker {
     rb                    <- AskResponseBuilder[F](domainSchemaServ)
     repo                  <- AskRepo[F](qb, qm, utm, rb)
 
-    typeDBClient             <- Resource.pure(TypeDB.coreClient(s"${typeDBConf.url}"))
-    typeDBTransactionManager <- TypeDBTransactionManager[F](typeDBClient, typeDBConf)
-    typeDBQueryHelper        <- TypeDBQueryHelper[F](domainSchemaServ)
-    typeDBQueryBuilder       <- TypeDBQueryBuilder[F](typeDBQueryHelper, domainSchemaServ)
-    typeDBQueryManager       <-
+    typeDBQueryHelper  <- TypeDBQueryHelper[F](domainSchemaServ)
+    typeDBQueryBuilder <- TypeDBQueryBuilder[F](typeDBQueryHelper, domainSchemaServ)
+    typeDBQueryManager <-
       TypeDBQueryManager[F](typeDBTransactionManager, typeDBQueryBuilder, typeDBQueryHelper, typeDBConf)
 
     typeDBRepo <- ActionServerTypeDBRepo[F](typeDBQueryManager, typeDBTransactionManager, typeDBConf)

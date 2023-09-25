@@ -10,6 +10,8 @@ import java.util.UUID
 
 trait TypeDBTransactionManager[F[_]] {
   def read(requestId: UUID, domain: Domain): Resource[F, TypeDBTransaction]
+
+  def write(requestId: UUID, domain: Domain): Resource[F, TypeDBTransaction]
 }
 
 object TypeDBTransactionManager {
@@ -32,6 +34,22 @@ final class TypeDBTransactionManagerImpl[F[+_]: Sync](
       val pureTransaction = Sync[F].delay(
         session.transaction(
           TypeDBTransaction.Type.READ,
+          TypeDBOptions
+            .core()
+            .infer(conf.rules)
+            .parallel(conf.parallel)
+            .transactionTimeoutMillis(conf.transactionTimeoutMillis)
+        )
+      )
+
+      Resource.fromAutoCloseable(pureTransaction)
+    }
+
+  override def write(requestId: UUID, domain: Domain): Resource[F, TypeDBTransaction] =
+    makeSession(requestId, domain).flatMap { session =>
+      val pureTransaction = Sync[F].delay(
+        session.transaction(
+          TypeDBTransaction.Type.WRITE,
           TypeDBOptions
             .core()
             .infer(conf.rules)
