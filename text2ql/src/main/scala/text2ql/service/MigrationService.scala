@@ -36,14 +36,14 @@ class MigrationServiceImpl[F[_]: Async: Logger](
   override def generateEmployees(n: Int): F[Unit] = migrationRepo.generateEmployees(n)
 
   override def insertHrToTypeDB: F[Unit] = for {
-//    _ <- insertRegionsTypeDB()
-//    _ <- insertCitiesTypeDB()
-//    _ <- insertLocationsTypeDB()
-//    _ <- insertDepartmentsTypeDB()
-//    _ <- insertEmployeesTypeDB()
-//    _ <- insertJobsTypeDB()
-//    _ <- insertJobFunctionsTypeDB()
-    _ <- insertRelations()
+    _ <- insertRegionsTypeDB()
+    _ <- insertCitiesTypeDB()
+    _ <- insertLocationsTypeDB()
+    _ <- insertDepartmentsTypeDB()
+    _ <- insertEmployeesTypeDB()
+    _ <- insertJobsTypeDB()
+    _ <- insertJobFunctionsTypeDB()
+//    _ <- insertRelations()
   } yield ()
 
   private def insertRegionsTypeDB() = migrationRepo.getHrRegionStream
@@ -144,6 +144,7 @@ class MigrationServiceImpl[F[_]: Async: Logger](
     .drain
 
   private def insertEmployeesTypeDB() = migrationRepo.getHrEmployeesStream
+    .take(1000) //be careful with typedb performance
     .chunkN(1000)
     .parEvalMap(8) { chunk =>
       transactionManager.write(UUID.randomUUID(), Domain.HR).use { transaction =>
@@ -238,12 +239,12 @@ class MigrationServiceImpl[F[_]: Async: Logger](
       "insert $job_employees(job_role: $job, employee_role: $employee) isa job_employees;"
     val functionJobs        = "match $job_function isa job_function, has id $id;$job isa job ,has function_id = $id;" +
       "insert $function_jobs(function_role:$job_function,job_role: $job) isa function_jobs;"
-    Vector(cityLocations, locationDepartments, departmentEmployees, jobEmployees, functionJobs).foldMapA {
+    Vector(regionCities, cityLocations, locationDepartments, departmentEmployees, jobEmployees, functionJobs).foldMapA {
       insertQueryStr =>
         transactionManager.write(UUID.randomUUID(), Domain.HR).use { transaction =>
           for {
             _ <- Async[F]
-                   .delay {
+                   .blocking {
                      val insertQuery = TypeQL.parseQuery[TypeQLInsert](insertQueryStr)
                      transaction.query().insert(insertQuery)
                      transaction.commit()

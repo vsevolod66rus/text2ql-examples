@@ -13,14 +13,11 @@ location_id sub attribute, value string;
 job_id sub attribute, value string;
 department_id sub attribute, value string;
 gender sub attribute, value boolean;
-emaol sub attribute, value string;
+email sub attribute, value string;
 hired_date sub attribute, value datetime;
 fired sub attribute, value boolean;
 fired_date sub attribute, value datetime;
 function_id sub attribute, value string;
-
-
-
 
 #отношения (связи)
 region_cities sub relation,
@@ -28,7 +25,7 @@ region_cities sub relation,
     relates city_role;
 
 city_locations sub relation,
-    relates city_tole,
+    relates city_role,
     relates location_role;
 
 location_departments sub relation,
@@ -50,44 +47,44 @@ function_jobs sub relation,
 #сущности
 region sub entity,
     plays region_cities:region_role,
-    owns id,
-    owns code,
+    owns id @key,
+    owns code @unique,
     owns name;
 
 city sub entity,
     plays region_cities:city_role,
-    plays city_locations:city_tole,
-    owns id,
+    plays city_locations:city_role,
+    owns id @key,
     owns region_id,
-    owns code,
+    owns code @unique,
     owns name;
 
-locations sub entity,
+location sub entity,
     plays city_locations:location_role,
     plays location_departments:location_role,
-    owns id,
+    owns id @key,
     owns city_id,
-    owns code,
+    owns code @unique,
     owns name;
 
 department sub entity,
     plays location_departments:department_role,
     plays department_employees:department_role,
-    owns id,
+    owns id @key,
     owns location_id,
-    owns code,
+    owns code @unique,
     owns name,
     owns path;
 
 employee sub entity,
     plays department_employees:employee_role,
     plays job_employees:employee_role,
-    owns id,
+    owns id @key,
     owns job_id,
     owns department_id,
     owns gender,
     owns name,
-    owns emaol,
+    owns email @unique,
     owns hired_date,
     owns fired,
     owns fired_date,
@@ -96,31 +93,35 @@ employee sub entity,
 job sub entity,
     plays job_employees:job_role,
     plays function_jobs:job_role,
-    owns id,
+    owns id @key,
     owns function_id,
-    owns code,
+    owns code @unique,
     owns name;
 
 job_function sub entity,
     plays function_jobs:function_role,
-    owns id,
-    owns code,
+    owns id @key,
+    owns code @unique,
     owns name;
 
 
-match $department isa department, has id $id;$employee isa employee ,has department_id = $id;
-insert $department_employees(department_role: $department, employee_role: $employee) isa department_employees;
-
-
-match $employee isa employee, has id $employee_id ,has name $employee_name; get $employee,$employee_id, $employee_name;sort $employee_id asc; offset 0; limit 10;
-
-define
-
-rule transitive-reachability:
-    when {
-        $department isa department, has id $id;
-        $employee isa employee ,has department_id = $id;
-    } then {
-        (department_role: $department, employee_role: $employee) isa department_employees;
-    };
+match $region isa region; $region has id $region_id; $region has code $region_code; $region has name $region_name;
+$city isa city; $city has id $city_id; $city has code $city_code; $city has name $city_name;
+$location isa location; $location has code $location_code; $location has name $location_name;
+$department isa department; $department has id $department_id; $department has code $department_code; $department has name $department_name; $department has path $department_path;
+$job_function isa job_function; $job_function has id $job_function_id; $job_function has code $job_function_code; $job_function has name $job_function_name;
+$job isa job; $job has id $job_id; $job has code $job_code; $job has name $job_name;
+$employee isa employee; $employee has name $employee_name; $employee has hired_date $employee_hired_date; $employee has gender $employee_gender; $employee has id $employee_id; $employee has email $employee_email;
+$region_cities ($region, $city) isa region_cities;
+$job_employees ($job, $employee) isa job_employees;
+$location_departments ($location, $department) isa location_departments;
+$function_jobs ($job_function, $job) isa function_jobs;
+$department_employees ($department, $employee) isa department_employees;
+$city_locations ($city, $location) isa city_locations;
+get $region, $city, $location, $department, $job_function, $job, $employee, $region_id, $region_code,
+$region_name, $city_id, $city_code, $city_name, $location_code, $location_name, $department_id, $department_code,
+$department_name, $department_path, $job_function_id, $job_function_code, $job_function_name, $job_id, $job_code,
+$job_name, $employee_name, $employee_hired_date, $employee_gender, $employee_id, $employee_email, $region_cities,
+$job_employees, $location_departments, $function_jobs, $department_employees, $city_locations;
+sort $employee_id asc;offset 0;limit 10;
 

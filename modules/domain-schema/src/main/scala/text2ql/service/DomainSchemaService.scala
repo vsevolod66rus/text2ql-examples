@@ -26,6 +26,7 @@ trait DomainSchemaService[F[_]] {
   def having(domain: Domain, key: String): F[Option[String]]
   def orderBy(domain: Domain, key: String): F[Option[String]]
   def sqlNames(domain: Domain, key: String): F[String]
+  def sqlNamesMap(domain: Domain): F[Map[String, String]]
   def edges(domain: Domain): F[List[DomainSchemaEdge]]
   def thingKeys(domain: Domain): F[Map[String, String]]
   def thingTitle(originalName: String, domain: Domain): F[String]
@@ -188,6 +189,9 @@ class DomainSchemaServiceImpl[F[_]: Async](
 
   def sqlNames(domain: Domain, key: String): F[String] =
     toSchema(domain).sqlNames.map(_.getOrElse(key, key))
+
+  def sqlNamesMap(domain: Domain): F[Map[String, String]] =
+    toSchema(domain).sqlNames
 
   def edges(domain: Domain): F[List[DomainSchemaEdge]] = toSchema(domain).edges
 

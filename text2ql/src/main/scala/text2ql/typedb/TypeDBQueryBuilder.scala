@@ -51,26 +51,27 @@ class TypeDBQueryBuilderImpl[F[_]: Sync](queryHelper: TypeDBQueryHelper[F], doma
           if (countQuery) Seq.empty[String] else logic.groupByAttr +: logic.visualization.tags :++ headlines
 
         val entityClauseF = queryData.entityList.foldLeftM("match ") { (query, entity) =>
-          val addEntity         = s"$$${entity.entityName} isa ${entity.entityName}; "
-          val addAttributeNames =
-            entity.attributes
-              .filter { a =>
-                a.attributeValues.exists(_.nonEmpty) || attributesToIncludeToQuery.contains(a.attributeName)
-              }
-              .distinctBy(_.attributeName)
-              .map(a =>
-                s"$$${entity.entityName} has ${if (a.attributeName.endsWith("_code") || a.attributeName.endsWith("_name") || a.attributeName.endsWith("_id"))
-                  a.attributeName.split("_").last
-                else a.attributeName} $$${a.attributeName};"
-              )
-              .mkString(" ")
-          val attributesClauseF =
-            if (entity.attributes.isEmpty) "".pure[F]
-            else queryHelper.collectAggregateClause(entity.attributes, domain)
+          for {
+            attrValues       <- domainSchema.sqlNamesMap(domain)
+            addEntity         = s"$$${entity.entityName} isa ${entity.entityName}; "
+            addAttributeNames =
+              entity.attributes
+                .filter { a =>
+                  a.attributeValues.exists(_.nonEmpty) || attributesToIncludeToQuery.contains(a.attributeName)
+                }
+                .distinctBy(_.attributeName)
+                .map(a =>
+                  s"$$${entity.entityName} has ${attrValues.getOrElse(a.attributeName, a.attributeName)} $$${a.attributeName};"
+                )
+                .mkString(" ")
+            attributesClauseF =
+              if (entity.attributes.isEmpty) "".pure[F]
+              else queryHelper.collectAggregateClause(entity.attributes, domain)
 
-          attributesClauseF.map { attributesClause =>
-            query + addEntity + addAttributeNames + attributesClause
-          }
+            res <- attributesClauseF.map { attributesClause =>
+                     query + addEntity + addAttributeNames + attributesClause
+                   }
+          } yield res
         }
 
         val relationClauseF = queryData.relationList.foldLeftM("") { (query, relation) =>

@@ -9,6 +9,8 @@ import doobie.Transactor
 import org.typelevel.log4cats.Logger
 import text2ql.migration._
 import fs2.Stream
+import text2ql.api.Domain
+import text2ql.configs.DBDataConfig
 
 import java.util.UUID
 import java.time.Instant
@@ -28,21 +30,25 @@ trait MigrationRepo[F[_]] {
 object MigrationRepo {
 
   def apply[F[_]: Sync: Logger](
-      xaStorage: Transactor[F]
+      xaStorage: Transactor[F],
+      conf: DBDataConfig
   ): Resource[F, MigrationRepo[F]] =
-    Resource.eval(Sync[F].delay(new MigrationRepoImpl(xaStorage)))
+    Resource.eval(Sync[F].delay(new MigrationRepoImpl(xaStorage, conf)))
 }
 
 class MigrationRepoImpl[F[_]: Sync: Logger](
-    xaStorage: Transactor[F]
+    xaStorage: Transactor[F],
+    conf: DBDataConfig
 ) extends MigrationRepo[F] {
+
+  private val hrSchemaName = conf.pgSchemas.getOrElse(Domain.HR, Domain.HR.entryName)
 
   override def generateEmployees(n: Int): F[Unit] = {
     val departmentId = UUID.fromString("aebb311a-527b-11ee-be56-0242ac120009")
     val jobId        = UUID.fromString("5ddd0a88-527c-11ee-be56-0242ac120003")
     val path         = "employee1.employee8" //materialized path иерархия
 
-    val sql = "insert into hr.employees values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
+    val sql = s"insert into $hrSchemaName..employees values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
 
     val chunkedEmployees = fs2.Stream.range(11, 11 + n).covary[F].chunkN(1000).map { chunk =>
       chunk.map(i =>
@@ -74,37 +80,37 @@ class MigrationRepoImpl[F[_]: Sync: Logger](
   }
 
   override def getHrRegionStream: Stream[F, Region] = {
-    val sql = "select * from hr.regions"
+    val sql = s"select * from $hrSchemaName.regions"
     Fragment(sql, List.empty).query[Region].stream.transact(xaStorage)
   }
 
   override def getHrCitiesStream: Stream[F, City] = {
-    val sql = "select * from hr.cities"
+    val sql = s"select * from $hrSchemaName.cities"
     Fragment(sql, List.empty).query[City].stream.transact(xaStorage)
   }
 
   override def getHrLocationsStream: Stream[F, Location] = {
-    val sql = "select * from hr.locations"
+    val sql = s"select * from $hrSchemaName.locations"
     Fragment(sql, List.empty).query[Location].stream.transact(xaStorage)
   }
 
   override def getHrDepartmentsStream: Stream[F, Department] = {
-    val sql = "select * from hr.departments"
+    val sql = s"select * from $hrSchemaName.departments"
     Fragment(sql, List.empty).query[Department].stream.transact(xaStorage)
   }
 
   override def getHrEmployeesStream: Stream[F, Employee] = {
-    val sql = "select * from hr.employees"
+    val sql = s"select * from $hrSchemaName.employees"
     Fragment(sql, List.empty).query[Employee].stream.transact(xaStorage)
   }
 
   override def getHrJobsStream: Stream[F, Job] = {
-    val sql = "select * from hr.jobs"
+    val sql = s"select * from $hrSchemaName.jobs"
     Fragment(sql, List.empty).query[Job].stream.transact(xaStorage)
   }
 
   override def getHrJobFunctionsStream: Stream[F, JobFunction] = {
-    val sql = "select * from hr.job_functions"
+    val sql = s"select * from $hrSchemaName.job_functions"
     Fragment(sql, List.empty).query[JobFunction].stream.transact(xaStorage)
   }
 

@@ -28,7 +28,7 @@ object App extends WSApp[ApplicationConfig] {
     typeDBClient             <- Resource.pure(TypeDB.coreClient(s"${conf.typeDB.url}"))
     typeDBTransactionManager <- TypeDBTransactionManager[F](typeDBClient, conf.typeDB)
     domainSchemaChecker      <- DomainSchemaChecker[F](qm, utm, conf.database.data, typeDBTransactionManager, conf.typeDB)
-    migrationRepo            <- MigrationRepo[F](xaStorage)
+    migrationRepo            <- MigrationRepo[F](xaStorage, conf.database.data)
     migrationService         <- MigrationService[F](migrationRepo, typeDBTransactionManager)
     schemaController         <- DomainSchemaController[F](domainSchema, domainSchemaChecker)
     migrationsController     <- MigrationController[F](migrationService)
