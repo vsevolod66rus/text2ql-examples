@@ -19,7 +19,6 @@ trait QueryManager[F[_]] {
   def getGeneralQueryDTO(queryStr: String): F[GeneralQueryDTO]
   def getCount(buildQueryDTO: BuildQueryDTO, domain: Domain): F[CountQueryDTO]
   def getGenericPgRowStream(query: String, chunkSize: Int = 256): Stream[F, GenericPgRow]
-  def getNumericDescription(query: String): F[NumericDescriptionQueryDTO]
 }
 
 object QueryManager {
@@ -62,11 +61,6 @@ class QueryManagerImpl[F[_]: Sync: Logger](
   override def getGenericPgRowStream(query: String, chunkSize: Int = 256): Stream[F, GenericPgRow] =
     liftProcessGeneric(chunkSize, FC.prepareStatement(query), ().pure[PreparedStatementIO], FPS.executeQuery)
       .transact(xaStorage)
-
-  override def getNumericDescription(query: String): F[NumericDescriptionQueryDTO] = for {
-    _   <- Logger[F].info(s"try query: $query")
-    res <- Fragment.const(query).query[NumericDescriptionQueryDTO].unique.transact(xaStorage)
-  } yield res
 
   private def liftProcessGeneric(
       chunkSize: Int,

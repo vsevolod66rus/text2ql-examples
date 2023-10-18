@@ -105,6 +105,7 @@ job_function sub entity,
     owns name;
 
 
+#просто пример TQL запроса
 match $region isa region; $region has id $region_id; $region has code $region_code; $region has name $region_name;
 $city isa city; $city has id $city_id; $city has code $city_code; $city has name $city_name;
 $location isa location; $location has code $location_code; $location has name $location_name;

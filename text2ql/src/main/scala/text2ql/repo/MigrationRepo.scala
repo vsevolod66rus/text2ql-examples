@@ -41,44 +41,14 @@ class MigrationRepoImpl[F[_]: Sync: Logger](
     conf: DBDataConfig
 ) extends MigrationRepo[F] {
 
-  private val hrSchemaName = conf.pgSchemas.getOrElse(Domain.HR, Domain.HR.entryName)
+  case class Country(code: String, name: String, population: Long)
 
-  override def generateEmployees(n: Int): F[Unit] = {
-    val departmentId = UUID.fromString("aebb311a-527b-11ee-be56-0242ac120009")
-    val jobId        = UUID.fromString("5ddd0a88-527c-11ee-be56-0242ac120003")
-    val path         = "employee1.employee8" //materialized path иерархия
+  def find(n: String): ConnectionIO[Option[Country]] =
+    sql"select code, name, population from country where name = $n"
+      .query[Country]
+      .option
 
-    val sql = s"insert into $hrSchemaName..employees values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
-
-    val chunkedEmployees = fs2.Stream.range(11, 11 + n).covary[F].chunkN(1000).map { chunk =>
-      chunk.map(i =>
-        Employee(
-          id = UUID.randomUUID(),
-          jobId = jobId,
-          departmentId = departmentId,
-          gender = if (Random.nextInt() % 2 == 0) true else false,
-          name = s"employee$i",
-          email = s"employee$i@mail.com",
-          hiredDate = Instant.now(),
-          fired = false,
-          firedDate = None,
-          path = s"$path.employee$i"
-        )
-      )
-    }
-    chunkedEmployees
-      .evalMap { chunk =>
-        for {
-          insertMany <- Update[Employee](sql)
-                          .updateMany(chunk)
-                          .transact(xaStorage)
-          _          <- Logger[F].info(s"chunk inserted: $insertMany")
-        } yield ()
-      }
-      .compile
-      .drain
-  }
-
+  private val hrSchemaName                          = conf.pgSchemas.getOrElse(Domain.HR, Domain.HR.entryName)
   override def getHrRegionStream: Stream[F, Region] = {
     val sql = s"select * from $hrSchemaName.regions"
     Fragment(sql, List.empty).query[Region].stream.transact(xaStorage)
@@ -112,6 +82,42 @@ class MigrationRepoImpl[F[_]: Sync: Logger](
   override def getHrJobFunctionsStream: Stream[F, JobFunction] = {
     val sql = s"select * from $hrSchemaName.job_functions"
     Fragment(sql, List.empty).query[JobFunction].stream.transact(xaStorage)
+  }
+
+  override def generateEmployees(n: Int): F[Unit] = {
+    val departmentId = UUID.fromString("aebb311a-527b-11ee-be56-0242ac120009")
+    val jobId        = UUID.fromString("5ddd0a88-527c-11ee-be56-0242ac120003")
+    val path         = "employee1.employee8" // materialized path иерархия
+
+    val sql = s"insert into $hrSchemaName..employees values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
+
+    val chunkedEmployees = fs2.Stream.range(11, 11 + n).covary[F].chunkN(1000).map { chunk =>
+      chunk.map(i =>
+        Employee(
+          id = UUID.randomUUID(),
+          jobId = jobId,
+          departmentId = departmentId,
+          gender = if (Random.nextInt() % 2 == 0) true else false,
+          name = s"employee$i",
+          email = s"employee$i@mail.com",
+          hiredDate = Instant.now(),
+          fired = false,
+          firedDate = None,
+          path = s"$path.employee$i"
+        )
+      )
+    }
+    chunkedEmployees
+      .evalMap { chunk =>
+        for {
+          insertMany <- Update[Employee](sql)
+                          .updateMany(chunk)
+                          .transact(xaStorage)
+          _          <- Logger[F].info(s"chunk inserted: $insertMany")
+        } yield ()
+      }
+      .compile
+      .drain
   }
 
 }

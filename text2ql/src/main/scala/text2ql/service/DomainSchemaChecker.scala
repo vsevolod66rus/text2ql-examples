@@ -4,7 +4,7 @@ import cats.effect.{Async, Resource}
 import cats.implicits._
 import fs2.{Stream, text}
 import org.typelevel.log4cats.Logger
-import text2ql.{QueryBuilder, QueryManager, UnloggedTableManager}
+import text2ql.{QueryBuilder, QueryManager}
 import text2ql.api._
 import text2ql.configs.{DBDataConfig, TypeDBConfig}
 import text2ql.domainschema.CheckDomainSchemaResponse
@@ -38,7 +38,6 @@ object DomainSchemaChecker {
 
   def apply[F[+_]: Async: Logger](
       qm: QueryManager[F],
-      utm: UnloggedTableManager[F],
       conf: DBDataConfig,
       typeDBTransactionManager: TypeDBTransactionManager[F],
       typeDBConf: TypeDBConfig
@@ -48,9 +47,9 @@ object DomainSchemaChecker {
     requestTypeCalculator <- UserRequestTypeCalculator[F](domainSchemaServ)
     queryDataCalc         <-
       QueryDataCalculator[F](updater, domainSchemaServ, requestTypeCalculator)
-    qb                    <- QueryBuilder[F](domainSchemaServ, utm, conf)
+    qb                    <- QueryBuilder[F](domainSchemaServ, conf)
     rb                    <- AskResponseBuilder[F](domainSchemaServ)
-    repo                  <- AskRepo[F](qb, qm, utm, rb)
+    repo                  <- AskRepo[F](qb, qm, rb)
 
     typeDBQueryHelper  <- TypeDBQueryHelper[F](domainSchemaServ)
     typeDBQueryBuilder <- TypeDBQueryBuilder[F](typeDBQueryHelper, domainSchemaServ)
@@ -74,9 +73,7 @@ class DomainSchemaCheckerImpl[F[+_]: Async](
     _             <- content.through(text.utf8.decode).compile.string.flatMap(domainSchema.update(domain, _))
     entityNames   <- domainSchema.vertices(domain).map(_.map(_.vertexName).toList)
     samples        = buildClarifiedEntities(entityNames.map(List(_)))
-    queryDataList <- samples.traverse { e =>
-                       queryDataCalculator.prepareDataForQuery(e, baseUserReq, domain)
-                     }
+    queryDataList <- samples.traverse(e => queryDataCalculator.prepareDataForQuery(e, baseUserReq, domain))
     res           <- askQueries(queryDataList)
   } yield res
 
@@ -87,7 +84,9 @@ class DomainSchemaCheckerImpl[F[+_]: Async](
       content: Stream[F, Byte]
   ): F[List[CheckDomainSchemaResponse]] = for {
     _                   <- content.through(text.utf8.decode).compile.string.flatMap(domainSchema.update(domain, _))
-    entityNames         <- domainSchema.vertices(domain).map(_.map(_.vertexName).toList).map(_.filter(entities.contains))
+    entityNames         <- domainSchema.vertices(domain).map(_.map(_.vertexName).toList).map { lst =>
+                             if (entities.nonEmpty) lst.filter(entities.contains) else lst
+                           }
     entitiesSeq          = if (onlySet) List(entityNames) else (1 to entityNames.size).flatMap(entityNames.combinations).toList
     samples              = buildClarifiedEntities(entitiesSeq)
     queryDataListEither <- samples.traverse { entities =>
@@ -101,9 +100,7 @@ class DomainSchemaCheckerImpl[F[+_]: Async](
     _             <- content.through(text.utf8.decode).compile.string.flatMap(domainSchema.update(domain, _))
     entityNames   <- domainSchema.vertices(domain).map(_.map(_.vertexName).toList)
     samples        = buildClarifiedEntities(entityNames.map(List(_)))
-    queryDataList <- samples.traverse { e =>
-                       queryDataCalculator.prepareDataForQuery(e, baseUserReq, domain)
-                     }
+    queryDataList <- samples.traverse(e => queryDataCalculator.prepareDataForQuery(e, baseUserReq, domain))
     res           <- askQueriesTypeDB(queryDataList)
   } yield res
 
@@ -114,7 +111,9 @@ class DomainSchemaCheckerImpl[F[+_]: Async](
       content: Stream[F, Byte]
   ): F[List[CheckDomainSchemaResponse]] = for {
     _                   <- content.through(text.utf8.decode).compile.string.flatMap(domainSchema.update(domain, _))
-    entityNames         <- domainSchema.vertices(domain).map(_.map(_.vertexName).toList).map(_.filter(entities.contains))
+    entityNames         <- domainSchema.vertices(domain).map(_.map(_.vertexName).toList).map { lst =>
+                             if (entities.nonEmpty) lst.filter(entities.contains) else lst
+                           }
     entitiesSeq          = if (onlySet) List(entityNames) else (1 to entityNames.size).flatMap(entityNames.combinations).toList
     samples              = buildClarifiedEntities(entitiesSeq)
     queryDataListEither <- samples.traverse { entities =>
@@ -175,8 +174,7 @@ class DomainSchemaCheckerImpl[F[+_]: Async](
         BuildQueryDTO(
           generalQuery = resp.toOption.flatMap(_.query).getOrElse(""),
           countQuery = resp.toOption.map(_.count.query).getOrElse(""),
-          aggregation = false,
-          numericDescriptionQuery = None
+          aggregation = false
         ),
         res
       )

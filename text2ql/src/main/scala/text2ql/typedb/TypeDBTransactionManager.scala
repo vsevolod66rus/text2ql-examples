@@ -2,6 +2,7 @@ package text2ql.typedb
 
 import cats.effect._
 import cats.implicits._
+import com.vaticle.typedb.client.TypeDB
 import com.vaticle.typedb.client.api._
 import text2ql.api.Domain
 import text2ql.configs.TypeDBConfig
@@ -30,7 +31,7 @@ final class TypeDBTransactionManagerImpl[F[+_]: Sync](
 ) extends TypeDBTransactionManager[F] {
 
   override def read(requestId: UUID, domain: Domain): Resource[F, TypeDBTransaction] =
-    makeSession(requestId, domain).flatMap { session =>
+    openTypeDBSession(requestId, domain).flatMap { session =>
       val pureTransaction = Sync[F].delay(
         session.transaction(
           TypeDBTransaction.Type.READ,
@@ -46,7 +47,7 @@ final class TypeDBTransactionManagerImpl[F[+_]: Sync](
     }
 
   override def write(requestId: UUID, domain: Domain): Resource[F, TypeDBTransaction] =
-    makeSession(requestId, domain).flatMap { session =>
+    openTypeDBSession(requestId, domain).flatMap { session =>
       val pureTransaction = Sync[F].delay(
         session.transaction(
           TypeDBTransaction.Type.WRITE,
@@ -61,22 +62,13 @@ final class TypeDBTransactionManagerImpl[F[+_]: Sync](
       Resource.fromAutoCloseable(pureTransaction)
     }
 
-  private def makeSession(id: UUID, domain: Domain): Resource[F, TypeDBSession] = {
-    val pureSession = for {
-      keyspace <- {
-        domain match {
-          case Domain.HR   => conf.keyspaceHr
-          case Domain.NTC  => conf.keyspaceNTC
-          case Domain.HSE  => conf.keyspaceHSE
-          case Domain.BLPS => "mock"
-        }
-      }.pure[F]
-      session   = client.session(keyspace, TypeDBSession.Type.DATA)
-      //TODO cache
-      _         = println(id)
-    } yield session
+  private def openTypeDBSession(requestId: UUID, domain: Domain): Resource[F, TypeDBSession] =
+    Resource.fromAutoCloseable(getDbName(domain).map(client.session(_, TypeDBSession.Type.DATA)))
 
-    Resource.fromAutoCloseable(pureSession)
+  private def getDbName(domain: Domain): F[String] = Sync[F].delay {
+    domain match {
+      case Domain.HR => conf.keyspaceHr
+    }
   }
 
 }

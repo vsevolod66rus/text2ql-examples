@@ -14,19 +14,8 @@ sealed trait UserRequestType extends EnumEntry with Snakecase
 object UserRequestType extends Enum[UserRequestType] with TapirCodecEnumeratum with CirceEnum[UserRequestType] {
 
   case object Undefined                   extends UserRequestType
-  case object GetInstanceInfo             extends UserRequestType
   case object GetInstanceList             extends UserRequestType
-  case object GetNumericValueDescription  extends UserRequestType
-  case object GetStringValueDescription   extends UserRequestType
   case object CountInstancesInGroups      extends UserRequestType
-  case object SumAttributeValuesInGroups  extends UserRequestType
-  case object GetInstanceWithMaxAttribute extends UserRequestType
-  case object MaxCountInGroups            extends UserRequestType
-
-  val withGroupingRT: Set[UserRequestType] =
-    Set(CountInstancesInGroups, SumAttributeValuesInGroups, MaxCountInGroups)
-
-  val statsRT: Set[UserRequestType] = Set(GetNumericValueDescription, GetStringValueDescription)
 
   override def values: IndexedSeq[UserRequestType] = findValues
 

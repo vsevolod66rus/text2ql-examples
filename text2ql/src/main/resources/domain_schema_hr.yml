@@ -220,7 +220,7 @@ attributes:
     attribute_type: datetime
     attribute_value: hired_date
     sort: 6
-    title: Почта сотрудника
+    title: Дата найма сотрудника
 edges:
   - from: region
     to: city

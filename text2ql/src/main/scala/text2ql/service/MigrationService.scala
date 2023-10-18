@@ -43,7 +43,7 @@ class MigrationServiceImpl[F[_]: Async: Logger](
     _ <- insertEmployeesTypeDB()
     _ <- insertJobsTypeDB()
     _ <- insertJobFunctionsTypeDB()
-//    _ <- insertRelations()
+    _ <- insertRelations()
   } yield ()
 
   private def insertRegionsTypeDB() = migrationRepo.getHrRegionStream
@@ -143,38 +143,39 @@ class MigrationServiceImpl[F[_]: Async: Logger](
     .compile
     .drain
 
-  private def insertEmployeesTypeDB() = migrationRepo.getHrEmployeesStream
-    .take(1000) //be careful with typedb performance
-    .chunkN(1000)
-    .parEvalMap(8) { chunk =>
-      transactionManager.write(UUID.randomUUID(), Domain.HR).use { transaction =>
-        for {
-          _ <- Async[F]
-                 .delay {
-                   chunk
-                     .map { e =>
-                       val insertQueryStr =
-                         s"""insert $$employee isa employee, has id "${e.id}", has job_id "${e.jobId}",
+  private def insertEmployeesTypeDB(maxConcurrent: Int = 8) =
+    migrationRepo
+      .getHrEmployeesStream
+      .take(1000) //ограничим кол-во для демо - при больших количетвах (от 300 000) большие проблемы с производительностью TypeDB
+      .chunkN(1000)
+      .parEvalMap(maxConcurrent) { chunk =>
+        transactionManager.write(UUID.randomUUID(), Domain.HR).use { transaction =>
+          for {
+            _ <- Async[F]
+                   .delay {
+                     chunk
+                       .map { e =>
+                         val insertQueryStr =
+                           s"""insert $$employee isa employee, has id "${e.id}", has job_id "${e.jobId}",
                             |has department_id "${e.departmentId}", has gender ${e.gender}, has name "${e.name}", has email "${e.email}",
                             |has hired_date ${LocalDate
-                           .ofInstant(e.hiredDate, ZoneId.systemDefault())
-                           .toString}, has fired ${e.fired},
+                               .ofInstant(e.hiredDate, ZoneId.systemDefault())
+                               .toString}, has fired ${e.fired},
                             |has fired_date ${LocalDate
-                           .ofInstant(e.firedDate.getOrElse(Instant.ofEpochMilli(0L)), ZoneId.systemDefault())},
+                               .ofInstant(e.firedDate.getOrElse(Instant.ofEpochMilli(0L)), ZoneId.systemDefault())},
                             |has path "${e.path}";""".stripMargin
-//                       println(insertQueryStr)
-                       val insertQuery    = TypeQL.parseQuery[TypeQLInsert](insertQueryStr)
-                       transaction.query().insert(insertQuery)
-                     }
-                 }
-          _  = transaction.commit()
-          _  = transaction.close()
-          _ <- Logger[F].info(s"inserted ${chunk.size} employees")
-        } yield ()
+                         val insertQuery    = TypeQL.parseQuery[TypeQLInsert](insertQueryStr)
+                         transaction.query().insert(insertQuery)
+                       }
+                   }
+            _  = transaction.commit()
+            _  = transaction.close()
+            _ <- Logger[F].info(s"inserted ${chunk.size} employees")
+          } yield ()
+        }
       }
-    }
-    .compile
-    .drain
+      .compile
+      .drain
 
   private def insertJobsTypeDB() = migrationRepo.getHrJobsStream
     .chunkN(1000)

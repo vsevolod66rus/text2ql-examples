@@ -40,10 +40,7 @@ object DomainSchemaService {
 
   def apply[F[_]: Async]: Resource[F, DomainSchemaService[F]] = for {
     domainSchemaHR   <- DomainSchema[F](Domain.HR)
-    domainSchemaNTC  <- DomainSchema[F](Domain.NTC)
-    domainSchemaHSE  <- DomainSchema[F](Domain.HSE)
-    domainSchemaBLPS <- DomainSchema[F](Domain.BLPS)
-  } yield new DomainSchemaServiceImpl(domainSchemaHR, domainSchemaNTC, domainSchemaHSE, domainSchemaBLPS)
+  } yield new DomainSchemaServiceImpl(domainSchemaHR)
 
   val attributesPriorityForQueryDataCalculating: Map[String, Int] = Map(
     "relation_type"  -> 1,
@@ -129,17 +126,11 @@ object DomainSchemaService {
 }
 
 class DomainSchemaServiceImpl[F[_]: Async](
-    domainSchemaHR: DomainSchema[F],
-    domainSchemaNTC: DomainSchema[F],
-    domainSchemaHSE: DomainSchema[F],
-    domainSchemaBLPS: DomainSchema[F]
+    domainSchemaHR: DomainSchema[F]
 ) extends DomainSchemaService[F] {
 
   def toSchema: PartialFunction[Domain, DomainSchema[F]] = {
-    case Domain.NTC  => domainSchemaNTC
     case Domain.HR   => domainSchemaHR
-    case Domain.HSE  => domainSchemaHSE
-    case Domain.BLPS => domainSchemaBLPS
   }
 
   def uploadActive(domain: Domain, contentStream: fs2.Stream[F, Byte]): F[Unit] = for {

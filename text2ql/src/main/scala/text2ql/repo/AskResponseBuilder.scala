@@ -12,8 +12,7 @@ trait AskResponseBuilder[F[_]] {
       queryData: DataForDBQuery,
       buildQueryDTO: BuildQueryDTO,
       generalQueryDTO: GeneralQueryDTO,
-      countQueryDTO: CountQueryDTO,
-      numericDescriptionOpt: Option[NumericDescriptionQueryDTO]
+      countQueryDTO: CountQueryDTO
   ): F[AskRepoResponse]
 
   def makeGridProperties(queryData: DataForDBQuery): F[List[GridPropertyItemModel]]
@@ -45,35 +44,13 @@ class AskResponseBuilderImpl[F[_]: Async](
       queryData: DataForDBQuery,
       buildQueryDTO: BuildQueryDTO,
       generalQueryDTO: GeneralQueryDTO,
-      countQueryDTO: CountQueryDTO,
-      numericDescriptionOpt: Option[NumericDescriptionQueryDTO]
+      countQueryDTO: CountQueryDTO
   ): F[AskRepoResponse] = {
     val count = countQueryDTO.countGroups.getOrElse(countQueryDTO.countRecords)
     val gridF = queryData.requestType match {
       case UserRequestType.Undefined                      => makeGrid(generalQueryDTO, queryData, count)
-      case UserRequestType.GetInstanceInfo                => makeGrid(generalQueryDTO, queryData, count)
-      case UserRequestType.GetInstanceList if count == 1L =>
-        makeGrid(generalQueryDTO, queryData.copy(requestType = UserRequestType.GetInstanceInfo), count)
       case UserRequestType.GetInstanceList                => makeGrid(generalQueryDTO, queryData, count)
-      case UserRequestType.GetNumericValueDescription     =>
-        numericDescriptionOpt.fold(makeGrid(generalQueryDTO, queryData, count))(dto =>
-          makeNumericDescriptionGrid(queryData, dto)
-        )
-      case UserRequestType.GetStringValueDescription      =>
-        makeGrid(
-          generalQueryDTO,
-          queryData.copy(logic =
-            queryData.logic.copy(
-              unique = true,
-              visualization = queryData.logic.visualization.copy(tags = List("counting", "percent", "aggregation"))
-            )
-          ),
-          countQueryDTO.countTarget.getOrElse(countQueryDTO.countRecords)
-        )
       case UserRequestType.CountInstancesInGroups         => makeGrid(generalQueryDTO, queryData, count)
-      case UserRequestType.SumAttributeValuesInGroups     => makeGrid(generalQueryDTO, queryData, count)
-      case UserRequestType.GetInstanceWithMaxAttribute    => makeGrid(generalQueryDTO, queryData, count)
-      case UserRequestType.MaxCountInGroups               => makeGrid(generalQueryDTO, queryData, count)
     }
     gridF.map(toAskResponse(countQueryDTO, buildQueryDTO.generalQuery, queryData))
   }
@@ -206,71 +183,5 @@ class AskResponseBuilderImpl[F[_]: Async](
     title = s"Агрегация по $aggregationBy".some,
     total = total
   )
-
-  private def makeNumericDescriptionGrid(
-      queryData: DataForDBQuery,
-      numericDescription: NumericDescriptionQueryDTO
-  ): F[GridWithDataRenderTypeResponseModel] = {
-    val constantProperties: List[GridPropertyItemModel] = List(
-      GridPropertyItemModel(
-        key = "min",
-        title = "Минимальное значение",
-        dataType = GridPropertyDataTypeNumber(),
-        filter = None
-      ),
-      GridPropertyItemModel(
-        key = "max",
-        title = "Максимальное значение",
-        dataType = GridPropertyDataTypeNumber(),
-        filter = None
-      ),
-      GridPropertyItemModel(
-        key = "avg",
-        title = "Среднее значение",
-        dataType = GridPropertyDataTypeNumber(),
-        filter = None
-      ),
-      GridPropertyItemModel(
-        key = "median",
-        title = "Медианное значение",
-        dataType = GridPropertyDataTypeNumber(),
-        filter = None
-      ),
-      GridPropertyItemModel(
-        key = "sum",
-        title = "Сумма",
-        dataType = GridPropertyDataTypeNumber(),
-        filter = None
-      )
-    )
-    for {
-      targetOriginalName <- queryData.logic.groupByAttr.pure[F]
-      attributeTitle     <-
-        domainSchema.attributesTitle(queryData.domain).map(_.getOrElse(targetOriginalName, targetOriginalName))
-      attributeProperty   = GridPropertyItemModel(
-                              key = "name",
-                              title = "Атрибут",
-                              dataType = GridPropertyDataTypeString(),
-                              filter = None
-                            )
-      items               = List(
-                              Map(
-                                "id"     -> GridPropertyFilterValueString(java.util.UUID.randomUUID().toString),
-                                "name"   -> GridPropertyFilterValueString(attributeTitle),
-                                "min"    -> GridPropertyFilterValueNumber(numericDescription.minValue),
-                                "max"    -> GridPropertyFilterValueNumber(numericDescription.maxValue),
-                                "avg"    -> GridPropertyFilterValueNumber(numericDescription.avgValue),
-                                "median" -> GridPropertyFilterValueNumber(numericDescription.medianValue),
-                                "sum"    -> GridPropertyFilterValueNumber(numericDescription.sumValue)
-                              )
-                            )
-    } yield GridWithDataRenderTypeResponseModel(
-      renderType = IDataRenderTypeTable(),
-      properties = attributeProperty +: constantProperties,
-      items = items,
-      title = s"Статистика для $attributeTitle".some,
-      total = 1L
-    )
-  }
 
 }

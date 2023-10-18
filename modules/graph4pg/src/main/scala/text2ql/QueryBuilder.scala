@@ -21,15 +21,13 @@ object QueryBuilder {
 
   def apply[F[_]: Sync](
       domainSchema: DomainSchemaService[F],
-      unloggedTableManager: UnloggedTableManager[F],
       dataConf: DBDataConfig
   ): Resource[F, QueryBuilder[F]] =
-    Resource.eval(Sync[F].delay(new QueryBuilderImpl(domainSchema, unloggedTableManager, dataConf)))
+    Resource.eval(Sync[F].delay(new QueryBuilderImpl(domainSchema, dataConf)))
 }
 
 class QueryBuilderImpl[F[_]: Sync](
     domainSchema: DomainSchemaService[F],
-    unloggedTableManager: UnloggedTableManager[F],
     dataConf: DBDataConfig
 ) extends QueryBuilder[F] {
 
@@ -59,24 +57,9 @@ class QueryBuilderImpl[F[_]: Sync](
   private def findTargetEntity(queryData: DataForDBQuery): Option[EntityForDBQuery] =
     queryData.entityList.find(_.isTargetEntity)
 
-  def buildGeneralSqlQuery(queryData: DataForDBQuery, constantSqlChunk: String): F[BuildQueryDTO] = for {
-    res                            <- queryData.requestType match {
-                                        case UserRequestType.GetStringValueDescription => buildSqlForChart(queryData, constantSqlChunk)
-                                        case _                                         =>
-                                          if (queryData.logic.unique) buildSqlForTable(queryData, constantSqlChunk)
-                                          else buildSqlForChart(queryData, constantSqlChunk)
-                                      }
-    withNumericDescriptionQueryOpt <- queryData.requestType match {
-                                        case UserRequestType.GetNumericValueDescription =>
-                                          for {
-                                            sqlName    <-
-                                              domainSchema.sqlNames(queryData.domain, queryData.logic.groupByAttr)
-                                            sqlAttrName = s"${queryData.logic.targetThing}.$sqlName"
-                                            query      <- buildNumericValueQuery(sqlAttrName, constantSqlChunk)
-                                          } yield res.copy(numericDescriptionQuery = query.some)
-                                        case _                                          => res.pure[F]
-                                      }
-  } yield withNumericDescriptionQueryOpt
+  def buildGeneralSqlQuery(queryData: DataForDBQuery, constantSqlChunk: String): F[BuildQueryDTO] =
+    if (queryData.logic.unique) buildSqlForTable(queryData, constantSqlChunk)
+    else buildSqlForChart(queryData, constantSqlChunk)
 
   private def buildSqlForTable(queryData: DataForDBQuery, constantSqlChunk: String): F[BuildQueryDTO] =
     for {
@@ -111,8 +94,6 @@ class QueryBuilderImpl[F[_]: Sync](
     countingChunk         <-
       buildChunkFromLogicAttrs(queryData.logic.targetAttr, queryData.logic.targetThing, queryData.domain).map { c =>
         queryData.requestType match {
-          case UserRequestType.SumAttributeValuesInGroups                       => c
-          case UserRequestType.GetStringValueDescription                        => c
           case _ if queryData.logic.targetThing == queryData.logic.groupByThing => c
           case _                                                                => s"distinct $c"
         }
@@ -139,10 +120,7 @@ class QueryBuilderImpl[F[_]: Sync](
                              else "".pure[F]
     groupByChunk           = if (idChunkCondition) "GROUP BY aggregation, thing_id" else "GROUP BY aggregation"
     percentChunk           = s"count($countingChunk) * 100.0 / sum(count(*)) over () as percent"
-    countOrSum             = queryData.requestType match {
-                               case UserRequestType.SumAttributeValuesInGroups => "sum"
-                               case _                                          => "count"
-                             }
+    countOrSum             = "count"
     sortDirection          =
       queryData.logic.sortModelOpt.flatMap(_.direction).fold[SortDirection](SortDirection.desc)(identity).entryName
     havingAggregation      = queryData.logic.aggregationFilterOpt.fold("") { f =>
@@ -198,17 +176,10 @@ class QueryBuilderImpl[F[_]: Sync](
   private def buildThingIdChunk(attr: String, thing: String, domain: Domain): F[String] =
     buildChunkFromLogicAttrs(attr, thing, domain).map(name => s", $name as thing_id")
 
-  private def buildOrderByChunk(queryData: DataForDBQuery): F[String] = {
-    val maybeSort: Option[BaseSortModel] = {
-      queryData.requestType match {
-        case UserRequestType.GetInstanceWithMaxAttribute =>
-          queryData.logic.sortModelOpt
-        case _                                           =>
-          queryData.pagination.map(_.sort).filter(_.orderBy.exists(_.nonEmpty))
-      }
-    }
-
-    maybeSort
+  private def buildOrderByChunk(queryData: DataForDBQuery): F[String] =
+    queryData.pagination
+      .map(_.sort)
+      .filter(_.orderBy.exists(_.nonEmpty))
       .filter(sortModel => sortModel.orderBy.exists(_.nonEmpty) && sortModel.direction.nonEmpty)
       .fold {
         val keyAttrsF = findTargetEntity(queryData).map(findKeyAttributeOfEntity(queryData.domain)).sequence
@@ -216,7 +187,6 @@ class QueryBuilderImpl[F[_]: Sync](
       } { sortModel =>
         s"order by ${sortModel.orderBy.getOrElse("orderBy")} ${sortModel.direction.getOrElse("sortDirection")}".pure[F]
       }
-  }
 
   private def findKeyAttributeOfEntity(domain: Domain)(entity: EntityForDBQuery): F[String] = for {
     thingKeys    <- domainSchema.thingKeys(domain)
@@ -244,9 +214,7 @@ class QueryBuilderImpl[F[_]: Sync](
   private def buildCountTargetChunk(queryData: DataForDBQuery): F[String] = {
     val targetThing = queryData.logic.targetThing
     for {
-      distinctKey  <- if (queryData.requestType == UserRequestType.GetStringValueDescription)
-                        queryData.logic.groupByAttr.pure[F]
-                      else domainSchema.thingKeys(queryData.domain).map(_.getOrElse(targetThing, targetThing))
+      distinctKey  <- domainSchema.thingKeys(queryData.domain).map(_.getOrElse(targetThing, targetThing))
       sqlNameKey   <- domainSchema.sqlNames(queryData.domain, distinctKey)
       distinctThing = s"${targetThing.toUpperCase}.$sqlNameKey"
     } yield s"COUNT(DISTINCT $distinctThing)"
@@ -272,42 +240,36 @@ class QueryBuilderImpl[F[_]: Sync](
       }
       .map(_.mkString(", "))
 
-  //TODO правило, чтобы заменять <tableName> на <pgSchemaName>.<tableName>
   private def buildThingChunk(
       thingName: String,
       attributes: List[AttributeForDBQuery],
       domain: Domain,
       requestId: UUID
   ): F[String] = for {
-    selectChunk       <- domainSchema.select(domain, thingName).map("SELECT " + _)
-    pgSchemaName       = dataConf.pgSchemas.getOrElse(domain, domain.entryName.toLowerCase)
-    fromChunk         <- domainSchema.from(domain, thingName, pgSchemaName).map("FROM " + _)
-    joinChunkRaw      <- domainSchema.join(domain, thingName)
-    joinChunk          = joinChunkRaw.map {
-                           _.replaceAll("join ", s"join $pgSchemaName.")
-                             .replaceAll("JOIN ", s"JOIN $pgSchemaName.")
-                         }
-    groupByChunk      <- domainSchema.groupBy(domain, thingName).map(_.map("GROUP BY " + _))
-    havingChunk       <- domainSchema.having(domain, thingName).map(_.map("HAVING " + _))
-    orderByChunk      <- domainSchema.orderBy(domain, thingName).map(_.map("ORDER " + _))
-    whereChunk        <- domainSchema.where(domain, thingName).map(_.map("WHERE " + _))
-    rightJoinFullText <- attributes
-                           .filter(_.fullTextItems.nonEmpty)
-                           .traverse(buildRightJoinFullText(thingName, domain, requestId))
-                           .map(_.mkString(" "))
-    res                = List(
-                           "(".some,
-                           selectChunk.some,
-                           fromChunk.some,
-                           joinChunk,
-                           whereChunk,
-                           groupByChunk,
-                           havingChunk,
-                           orderByChunk,
-                           ") as".some,
-                           thingName.toUpperCase.some,
-                           rightJoinFullText.some
-                         ).collect { case Some(s) => s }.mkString(" ")
+    selectChunk  <- domainSchema.select(domain, thingName).map("SELECT " + _)
+    pgSchemaName  = dataConf.pgSchemas.getOrElse(domain, domain.entryName.toLowerCase)
+    fromChunk    <- domainSchema.from(domain, thingName, pgSchemaName).map("FROM " + _)
+    joinChunkRaw <- domainSchema.join(domain, thingName)
+    joinChunk     = joinChunkRaw.map {
+                      _.replaceAll("join ", s"join $pgSchemaName.")
+                        .replaceAll("JOIN ", s"JOIN $pgSchemaName.")
+                    }
+    groupByChunk <- domainSchema.groupBy(domain, thingName).map(_.map("GROUP BY " + _))
+    havingChunk  <- domainSchema.having(domain, thingName).map(_.map("HAVING " + _))
+    orderByChunk <- domainSchema.orderBy(domain, thingName).map(_.map("ORDER " + _))
+    whereChunk   <- domainSchema.where(domain, thingName).map(_.map("WHERE " + _))
+    res           = List(
+                      "(".some,
+                      selectChunk.some,
+                      fromChunk.some,
+                      joinChunk,
+                      whereChunk,
+                      groupByChunk,
+                      havingChunk,
+                      orderByChunk,
+                      ") as".some,
+                      thingName.toUpperCase.some
+                    ).collect { case Some(s) => s }.mkString(" ")
   } yield res
 
   private def buildFiltersChunk(domain: Domain, thingName: String)(attributeQuery: AttributeForDBQuery): F[String] =
@@ -342,14 +304,6 @@ class QueryBuilderImpl[F[_]: Sync](
       if (GridPropertyFilterValue.nullValueDescription == value) s"$sqlName is null"
       else s"$sqlName ${attribute.comparisonOperator} $value"
   } yield chunk
-
-  private def buildRightJoinFullText(thingName: String, domain: Domain, requestId: UUID)(
-      attributeForDBQuery: AttributeForDBQuery
-  ): F[String] = for {
-    thingKeysSQL <- domainSchema.thingKeysSQL(domain)
-    tempTableName = unloggedTableManager.makeUnloggedTableName(attributeForDBQuery.attributeName, requestId)
-    keyName       = thingKeysSQL.getOrElse(thingName, s"key not found for $thingName")
-  } yield s"RIGHT JOIN $tempTableName on ${thingName.toUpperCase}.$keyName = $tempTableName.$keyName"
 
   @tailrec
   private def bfs(
