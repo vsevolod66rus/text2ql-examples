@@ -4,13 +4,18 @@ import cats.effect.{Async, Resource}
 import cats.implicits._
 import fs2.{Stream, text}
 import org.typelevel.log4cats.Logger
-import text2ql.{QueryBuilder, QueryManager}
 import text2ql.api._
 import text2ql.configs.{DBDataConfig, TypeDBConfig}
 import text2ql.domainschema.CheckDomainSchemaResponse
-import text2ql.repo.{AskRepo, AskResponseBuilder}
+import text2ql.dao.typedb.{
+  TypeDBDomainRepo,
+  TypeDBQueryBuilder,
+  TypeDBQueryManager,
+  TypeDBResponseBuilder,
+  TypeDBTransactionManager
+}
+import text2ql.dao.postgres.{DomainRepo, QueryBuilder, QueryManager, ResponseBuilder}
 import text2ql.service.DomainSchemaService._
-import text2ql.typedb._
 
 import java.util.UUID
 
@@ -48,23 +53,23 @@ object DomainSchemaChecker {
     queryDataCalc         <-
       QueryDataCalculator[F](updater, domainSchemaServ, requestTypeCalculator)
     qb                    <- QueryBuilder[F](domainSchemaServ, conf)
-    rb                    <- AskResponseBuilder[F](domainSchemaServ)
-    repo                  <- AskRepo[F](qb, qm, rb)
+    rb                    <- ResponseBuilder[F](domainSchemaServ)
+    repo                  <- DomainRepo[F](qb, qm, rb)
 
-    typeDBQueryHelper  <- TypeDBQueryHelper[F](domainSchemaServ)
+    typeDBQueryHelper  <- TypeDBResponseBuilder[F](domainSchemaServ)
     typeDBQueryBuilder <- TypeDBQueryBuilder[F](typeDBQueryHelper, domainSchemaServ)
     typeDBQueryManager <-
       TypeDBQueryManager[F](typeDBTransactionManager, typeDBQueryBuilder, typeDBQueryHelper, typeDBConf)
 
-    typeDBRepo <- ActionServerTypeDBRepo[F](typeDBQueryManager, typeDBTransactionManager, typeDBConf)
+    typeDBRepo <- TypeDBDomainRepo[F](typeDBQueryManager, typeDBTransactionManager, typeDBConf)
 
   } yield new DomainSchemaCheckerImpl[F](queryDataCalc, repo, typeDBRepo, domainSchemaServ, qb)
 }
 
 class DomainSchemaCheckerImpl[F[+_]: Async](
     queryDataCalculator: QueryDataCalculator[F],
-    askRepo: AskRepo[F],
-    askRepoTypeDB: ActionServerTypeDBRepo[F],
+    askRepo: DomainRepo[F],
+    askRepoTypeDB: TypeDBDomainRepo[F],
     domainSchema: DomainSchemaService[F],
     qb: QueryBuilder[F]
 ) extends DomainSchemaChecker[F] {

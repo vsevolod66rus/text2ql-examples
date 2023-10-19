@@ -1,4 +1,4 @@
-package text2ql.typedb
+package text2ql.dao.typedb
 
 import cats.effect._
 import cats.implicits._

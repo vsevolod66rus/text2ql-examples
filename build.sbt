@@ -38,7 +38,7 @@ lazy val app = (project in file("text2ql"))
   .enablePlugins(JavaAppPackaging)
   .enablePlugins(BuildInfoPlugin)
   .enablePlugins(GitVersioning)
-  .dependsOn(webService, graph4pg)
+  .dependsOn(webService, domainSchema)
   .settings(commonSettings)
   .settings(
     name := "text2ql-app",
@@ -120,10 +120,4 @@ lazy val domainSchema = project
   .settings(commonSettings)
   .settings(scalacOptions += "-Wconf:msg=doobieContext.Quoted:s")
   .settings(libraryDependencies += Dependencies.circeYaml)
-  .dependsOn(models, postgres)
-
-lazy val graph4pg = project
-  .in(file("modules/graph4pg"))
-  .settings(name := "graph4pg")
-  .settings(commonSettings)
-  .dependsOn(models, domainSchema)
+  .dependsOn(postgres)

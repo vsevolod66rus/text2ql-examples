@@ -1,4 +1,4 @@
-package text2ql
+package text2ql.dao.postgres
 
 import cats.effect.kernel.{Resource, Sync}
 import cats.implicits._

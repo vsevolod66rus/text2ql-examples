@@ -1,4 +1,4 @@
-package text2ql.typedb
+package text2ql.dao.typedb
 
 import cats.effect.std.Semaphore
 import cats.effect._
@@ -13,7 +13,7 @@ import text2ql.error.ServerError.{TypeDBConnectionsLimitExceeded, TypeDBQueryExc
 
 import scala.concurrent.duration._
 
-trait ActionServerTypeDBRepo[F[_]] {
+trait TypeDBDomainRepo[F[_]] {
 
   def generalTypeDBQueryWithPermitAndRetry(queryData: DataForDBQuery): F[AskRepoResponse]
 
@@ -31,25 +31,25 @@ trait ActionServerTypeDBRepo[F[_]] {
   ): F[Stream[F, Map[String, GridPropertyFilterValue]]]
 }
 
-object ActionServerTypeDBRepo {
+object TypeDBDomainRepo {
 
   def apply[F[+_]: Async: Logger](
       queryManager: TypeDBQueryManager[F],
       transactionManager: TypeDBTransactionManager[F],
       conf: TypeDBConfig
-  ): Resource[F, ActionServerTypeDBRepo[F]] =
+  ): Resource[F, TypeDBDomainRepo[F]] =
     Resource.eval(
       Semaphore[F](conf.maxConcurrentTypeDB.toLong)
-        .map(new ActionServerTypeDBRepoImpl(_, queryManager, transactionManager, conf))
+        .map(new TypeDBDomainRepoImpl(_, queryManager, transactionManager, conf))
     )
 }
 
-class ActionServerTypeDBRepoImpl[F[+_]: Async: Logger](
+class TypeDBDomainRepoImpl[F[+_]: Async: Logger](
     semaphore: Semaphore[F],
     queryManager: TypeDBQueryManager[F],
     transactionManager: TypeDBTransactionManager[F],
     conf: TypeDBConfig
-) extends ActionServerTypeDBRepo[F] {
+) extends TypeDBDomainRepo[F] {
 
   def generalTypeDBQueryWithPermitAndRetry(queryData: DataForDBQuery): F[AskRepoResponse] = retryOnSomeErrors(
     semaphore.tryAcquire.ifM(

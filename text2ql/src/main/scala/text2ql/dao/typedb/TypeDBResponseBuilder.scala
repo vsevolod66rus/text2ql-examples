@@ -1,4 +1,4 @@
-package text2ql.typedb
+package text2ql.dao.typedb
 
 import cats.effect.kernel.{Resource, Sync}
 import cats.implicits._
@@ -10,7 +10,7 @@ import text2ql.service.DomainSchemaService._
 import java.time.LocalDateTime
 import scala.util.Try
 
-trait TypeDBQueryHelper[F[_]] {
+trait TypeDBResponseBuilder[F[_]] {
 
   def collectAggregateClause(attributes: Seq[AttributeForDBQuery], domain: Domain): F[String]
 
@@ -46,15 +46,15 @@ trait TypeDBQueryHelper[F[_]] {
   ): String
 }
 
-object TypeDBQueryHelper {
+object TypeDBResponseBuilder {
 
   def apply[F[_]: Sync](
       domainSchema: DomainSchemaService[F]
-  ): Resource[F, TypeDBQueryHelper[F]] =
-    Resource.eval(Sync[F].delay(new TypeDBQueryHelperImpl(domainSchema)))
+  ): Resource[F, TypeDBResponseBuilder[F]] =
+    Resource.eval(Sync[F].delay(new TypeDBResponseBuilderImpl(domainSchema)))
 }
 
-class TypeDBQueryHelperImpl[F[_]: Sync](domainSchema: DomainSchemaService[F]) extends TypeDBQueryHelper[F] {
+class TypeDBResponseBuilderImpl[F[_]: Sync](domainSchema: DomainSchemaService[F]) extends TypeDBResponseBuilder[F] {
 
   override def collectAggregateClause(attributes: Seq[AttributeForDBQuery], domain: Domain): F[String] =
     attributes

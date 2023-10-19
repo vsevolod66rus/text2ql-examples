@@ -1,4 +1,4 @@
-package text2ql.typedb
+package text2ql.dao.typedb
 
 import cats.effect.kernel._
 import cats.implicits._
@@ -22,14 +22,14 @@ trait TypeDBQueryBuilder[F[_]] {
 object TypeDBQueryBuilder {
 
   def apply[F[_]: Sync](
-      queryHelper: TypeDBQueryHelper[F],
+      queryHelper: TypeDBResponseBuilder[F],
       domainSchema: DomainSchemaService[F]
   ): Resource[F, TypeDBQueryBuilder[F]] =
     Resource.eval(Sync[F].delay(new TypeDBQueryBuilderImpl(queryHelper, domainSchema)))
 
 }
 
-class TypeDBQueryBuilderImpl[F[_]: Sync](queryHelper: TypeDBQueryHelper[F], domainSchema: DomainSchemaService[F])
+class TypeDBQueryBuilderImpl[F[_]: Sync](queryHelper: TypeDBResponseBuilder[F], domainSchema: DomainSchemaService[F])
     extends TypeDBQueryBuilder[F] {
 
   def build(

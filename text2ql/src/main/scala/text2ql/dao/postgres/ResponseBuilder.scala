@@ -1,4 +1,4 @@
-package text2ql.repo
+package text2ql.dao.postgres
 
 import cats.effect.{Async, Resource}
 import cats.implicits._
@@ -6,7 +6,7 @@ import text2ql.api._
 import text2ql.service.DomainSchemaService
 import text2ql.service.DomainSchemaService._
 
-trait AskResponseBuilder[F[_]] {
+trait ResponseBuilder[F[_]] {
 
   def buildResponse(
       queryData: DataForDBQuery,
@@ -28,17 +28,17 @@ trait AskResponseBuilder[F[_]] {
   )(row: Vector[String]): F[GridPropertyFilterValue]
 }
 
-object AskResponseBuilder {
+object ResponseBuilder {
 
   def apply[F[_]: Async](
       domainSchema: DomainSchemaService[F]
-  ): Resource[F, AskResponseBuilder[F]] =
-    Resource.eval(Async[F].delay(new AskResponseBuilderImpl[F](domainSchema)))
+  ): Resource[F, ResponseBuilder[F]] =
+    Resource.eval(Async[F].delay(new ResponseBuilderImpl[F](domainSchema)))
 }
 
-class AskResponseBuilderImpl[F[_]: Async](
+class ResponseBuilderImpl[F[_]: Async](
     domainSchema: DomainSchemaService[F]
-) extends AskResponseBuilder[F] {
+) extends ResponseBuilder[F] {
 
   override def buildResponse(
       queryData: DataForDBQuery,
@@ -48,9 +48,9 @@ class AskResponseBuilderImpl[F[_]: Async](
   ): F[AskRepoResponse] = {
     val count = countQueryDTO.countGroups.getOrElse(countQueryDTO.countRecords)
     val gridF = queryData.requestType match {
-      case UserRequestType.Undefined                      => makeGrid(generalQueryDTO, queryData, count)
-      case UserRequestType.GetInstanceList                => makeGrid(generalQueryDTO, queryData, count)
-      case UserRequestType.CountInstancesInGroups         => makeGrid(generalQueryDTO, queryData, count)
+      case UserRequestType.Undefined              => makeGrid(generalQueryDTO, queryData, count)
+      case UserRequestType.GetInstanceList        => makeGrid(generalQueryDTO, queryData, count)
+      case UserRequestType.CountInstancesInGroups => makeGrid(generalQueryDTO, queryData, count)
     }
     gridF.map(toAskResponse(countQueryDTO, buildQueryDTO.generalQuery, queryData))
   }

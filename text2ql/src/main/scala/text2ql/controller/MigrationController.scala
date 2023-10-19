@@ -40,7 +40,7 @@ class MigrationController[F[_]: Async](
       .in("migrateHRDataToTypeDB")
       .out(stringBody)
       .serverLogicRecoverErrors { _ =>
-        migrationService.insertHrToTypeDB.map(_ => "migrated")
+        migrationService.insertHrToTypeDB().map(_ => "migrated")
       }
   )
 }

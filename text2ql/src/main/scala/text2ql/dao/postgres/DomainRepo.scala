@@ -1,40 +1,39 @@
-package text2ql.repo
+package text2ql.dao.postgres
 
 import cats.effect.{Async, Resource}
 import cats.implicits._
 import fs2.Stream
 import org.typelevel.log4cats.Logger
-import text2ql.{QueryBuilder, QueryManager}
 import text2ql.api.{AskRepoResponse, DataForDBQuery, GridPropertyFilterValue}
 
-trait AskRepo[F[_]] {
+trait DomainRepo[F[_]] {
   def generalQuery(queryData: DataForDBQuery): F[AskRepoResponse]
   def streamQuery(queryData: DataForDBQuery): F[Stream[F, Map[String, GridPropertyFilterValue]]]
 }
 
-object AskRepo {
+object DomainRepo {
 
   def apply[F[_]: Async: Logger](
       qb: QueryBuilder[F],
       qm: QueryManager[F],
-      responseBuilder: AskResponseBuilder[F]
-  ): Resource[F, AskRepo[F]] =
-    Resource.eval(Async[F].delay(new AskRepoImpl[F](qb, qm, responseBuilder)))
+      responseBuilder: ResponseBuilder[F]
+  ): Resource[F, DomainRepo[F]] =
+    Resource.eval(Async[F].delay(new DomainRepoImpl[F](qb, qm, responseBuilder)))
 }
 
-class AskRepoImpl[F[_]: Async: Logger](
+class DomainRepoImpl[F[_]: Async: Logger](
     qb: QueryBuilder[F],
     qm: QueryManager[F],
-    responseBuilder: AskResponseBuilder[F]
-) extends AskRepo[F] {
+    responseBuilder: ResponseBuilder[F]
+) extends DomainRepo[F] {
 
   override def generalQuery(queryData: DataForDBQuery): F[AskRepoResponse] = for {
-    constantSqlChunk      <- qb.buildConstantSqlChunk(queryData)
-    buildQueryDTO         <- qb.buildGeneralSqlQuery(queryData, constantSqlChunk)
-    countDTO              <- queryData.count.fold(qm.getCount(buildQueryDTO, queryData.domain))(c => c.pure[F])
-    _                     <- Logger[F].info(s"try SQL: ${buildQueryDTO.generalQuery}")
-    generalQueryDTO       <- qm.getGeneralQueryDTO(buildQueryDTO.generalQuery)
-    res                   <- responseBuilder.buildResponse(queryData, buildQueryDTO, generalQueryDTO, countDTO)
+    constantSqlChunk <- qb.buildConstantSqlChunk(queryData)
+    buildQueryDTO    <- qb.buildGeneralSqlQuery(queryData, constantSqlChunk)
+    countDTO         <- queryData.count.fold(qm.getCount(buildQueryDTO, queryData.domain))(c => c.pure[F])
+    _                <- Logger[F].info(s"try SQL: ${buildQueryDTO.generalQuery}")
+    generalQueryDTO  <- qm.getGeneralQueryDTO(buildQueryDTO.generalQuery)
+    res              <- responseBuilder.buildResponse(queryData, buildQueryDTO, generalQueryDTO, countDTO)
   } yield res
 
   override def streamQuery(queryData: DataForDBQuery): F[Stream[F, Map[String, GridPropertyFilterValue]]] = for {

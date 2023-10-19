@@ -1,16 +1,15 @@
-package text2ql
+package text2ql.dao.postgres
 
 import cats.effect.kernel._
 import cats.implicits._
 import doobie._
 import doobie.implicits._
 import doobie.util.stream.repeatEvalChunks
-import doobie.{Fragment, Transactor}
 import fs2.Stream
 import fs2.Stream.{bracket, eval}
 import org.typelevel.log4cats.Logger
-import text2ql.QueryManager.GenericPgRow
 import text2ql.api._
+import text2ql.dao.postgres.QueryManager.GenericPgRow
 
 import java.sql.{PreparedStatement, ResultSet}
 import scala.annotation.tailrec

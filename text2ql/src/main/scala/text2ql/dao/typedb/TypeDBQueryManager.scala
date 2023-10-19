@@ -1,4 +1,4 @@
-package text2ql.typedb
+package text2ql.dao.typedb
 
 import cats.effect.kernel._
 import cats.implicits._
@@ -38,7 +38,7 @@ object TypeDBQueryManager {
   def apply[F[_]: Sync: Logger](
       transactionManager: TypeDBTransactionManager[F],
       queryBuilder: TypeDBQueryBuilder[F],
-      queryHelper: TypeDBQueryHelper[F],
+      queryHelper: TypeDBResponseBuilder[F],
       conf: TypeDBConfig
   ): Resource[F, TypeDBQueryManager[F]] =
     Resource.eval(
@@ -50,7 +50,7 @@ object TypeDBQueryManager {
 final class TypeDBQueryManagerImpl[F[_]: Sync: Logger](
     transactionManager: TypeDBTransactionManager[F],
     queryBuilder: TypeDBQueryBuilder[F],
-    queryHelper: TypeDBQueryHelper[F],
+    queryHelper: TypeDBResponseBuilder[F],
     conf: TypeDBConfig
 ) extends TypeDBQueryManager[F] {
 
