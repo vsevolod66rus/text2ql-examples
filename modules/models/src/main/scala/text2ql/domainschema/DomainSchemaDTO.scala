@@ -31,11 +31,7 @@ final case class DomainSchemaAttribute(
     attributeName: String,
     attributeValue: String,
     attributeType: String,
-    isCategorical: Option[Boolean],
-    vectorized: Option[Boolean],
-    sort: Option[Int],
-    title: String,
-    alternatives: Option[String]
+    title: String
 )
 
 final case class DomainSchemaEdge(

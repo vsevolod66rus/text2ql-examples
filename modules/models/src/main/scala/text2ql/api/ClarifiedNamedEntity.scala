@@ -10,7 +10,6 @@ case class ClarifiedNamedEntity(
     start: Int,
     namedValues: List[String],
     attributeSelected: Option[String],
-    fullTextItems: List[FullTextItem] = List.empty[FullTextItem],
     role: Option[String] = None,
     group: Option[Int] = None,
     isTarget: Boolean = false
@@ -23,8 +22,6 @@ case class ClarifiedNamedEntity(
     tag == name && value.contains(originalValue)
 
   def filterByGroupOpt: Option[Int] => Boolean = filter => group.exists(filter.contains)
-
-  def filterByRole: String => Boolean = filter => role.contains(filter)
 }
 
 object ClarifiedNamedEntity {

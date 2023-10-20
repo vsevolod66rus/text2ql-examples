@@ -2,17 +2,13 @@ package text2ql.dao.typedb
 
 import cats.effect._
 import cats.implicits._
-import com.vaticle.typedb.client.TypeDB
 import com.vaticle.typedb.client.api._
 import text2ql.api.Domain
 import text2ql.configs.TypeDBConfig
 
-import java.util.UUID
-
 trait TypeDBTransactionManager[F[_]] {
-  def read(requestId: UUID, domain: Domain): Resource[F, TypeDBTransaction]
-
-  def write(requestId: UUID, domain: Domain): Resource[F, TypeDBTransaction]
+  def read(domain: Domain): Resource[F, TypeDBTransaction]
+  def write(domain: Domain): Resource[F, TypeDBTransaction]
 }
 
 object TypeDBTransactionManager {
@@ -30,44 +26,37 @@ final class TypeDBTransactionManagerImpl[F[+_]: Sync](
     conf: TypeDBConfig
 ) extends TypeDBTransactionManager[F] {
 
-  override def read(requestId: UUID, domain: Domain): Resource[F, TypeDBTransaction] =
-    openTypeDBSession(requestId, domain).flatMap { session =>
-      val pureTransaction = Sync[F].delay(
-        session.transaction(
-          TypeDBTransaction.Type.READ,
-          TypeDBOptions
-            .core()
-            .infer(conf.rules)
-            .parallel(conf.parallel)
-            .transactionTimeoutMillis(conf.transactionTimeoutMillis)
-        )
-      )
-
-      Resource.fromAutoCloseable(pureTransaction)
+  override def read(domain: Domain): Resource[F, TypeDBTransaction] =
+    openTypeDBSession(domain).flatMap { session =>
+      Resource.fromAutoCloseable(openTypeDBTransaction(session, TypeDBTransaction.Type.READ))
     }
 
-  override def write(requestId: UUID, domain: Domain): Resource[F, TypeDBTransaction] =
-    openTypeDBSession(requestId, domain).flatMap { session =>
-      val pureTransaction = Sync[F].delay(
-        session.transaction(
-          TypeDBTransaction.Type.WRITE,
-          TypeDBOptions
-            .core()
-            .infer(conf.rules)
-            .parallel(conf.parallel)
-            .transactionTimeoutMillis(conf.transactionTimeoutMillis)
-        )
-      )
-
-      Resource.fromAutoCloseable(pureTransaction)
+  override def write(domain: Domain): Resource[F, TypeDBTransaction] =
+    openTypeDBSession(domain).flatMap { session =>
+      Resource.fromAutoCloseable(openTypeDBTransaction(session, TypeDBTransaction.Type.WRITE))
     }
 
-  private def openTypeDBSession(requestId: UUID, domain: Domain): Resource[F, TypeDBSession] =
+  private def openTypeDBSession(domain: Domain): Resource[F, TypeDBSession] =
     Resource.fromAutoCloseable(getDbName(domain).map(client.session(_, TypeDBSession.Type.DATA)))
+
+  private def openTypeDBTransaction(
+      session: TypeDBSession,
+      transactionType: TypeDBTransaction.Type
+  ): F[TypeDBTransaction] =
+    Sync[F].delay {
+      session.transaction(
+        transactionType,
+        TypeDBOptions
+          .core()
+          .infer(conf.rules)
+          .parallel(conf.parallel)
+          .transactionTimeoutMillis(conf.transactionTimeoutMillis)
+      )
+    }
 
   private def getDbName(domain: Domain): F[String] = Sync[F].delay {
     domain match {
-      case Domain.HR => conf.keyspaceHr
+      case Domain.HR => conf.dbHR
     }
   }
 

@@ -57,7 +57,7 @@ class MigrationRepoImpl[F[_]: Async: Logger](
   private def insertRegionsTypeDB() = getHrRegionStream
     .chunkN(1000)
     .parEvalMap(1) { chunk =>
-      transactionManager.write(UUID.randomUUID(), Domain.HR).use { transaction =>
+      transactionManager.write(Domain.HR).use { transaction =>
         for {
           _ <- Async[F]
                  .delay {
@@ -81,7 +81,7 @@ class MigrationRepoImpl[F[_]: Async: Logger](
   private def insertCitiesTypeDB() = getHrCitiesStream
     .chunkN(1000)
     .parEvalMap(1) { chunk =>
-      transactionManager.write(UUID.randomUUID(), Domain.HR).use { transaction =>
+      transactionManager.write(Domain.HR).use { transaction =>
         for {
           _ <- Async[F]
                  .delay {
@@ -105,7 +105,7 @@ class MigrationRepoImpl[F[_]: Async: Logger](
   private def insertLocationsTypeDB() = getHrLocationsStream
     .chunkN(1000)
     .parEvalMap(1) { chunk =>
-      transactionManager.write(UUID.randomUUID(), Domain.HR).use { transaction =>
+      transactionManager.write(Domain.HR).use { transaction =>
         for {
           _ <- Async[F]
                  .delay {
@@ -129,7 +129,7 @@ class MigrationRepoImpl[F[_]: Async: Logger](
   private def insertDepartmentsTypeDB() = getHrDepartmentsStream
     .chunkN(1000)
     .parEvalMap(1) { chunk =>
-      transactionManager.write(UUID.randomUUID(), Domain.HR).use { transaction =>
+      transactionManager.write(Domain.HR).use { transaction =>
         for {
           _ <- Async[F]
                  .delay {
@@ -158,7 +158,7 @@ class MigrationRepoImpl[F[_]: Async: Logger](
       ) // ограничим кол-во для демо - при больших количетвах (от 300 000) большие проблемы с производительностью TypeDB
       .chunkN(1000)
       .parEvalMap(maxConcurrent) { chunk =>
-        transactionManager.write(UUID.randomUUID(), Domain.HR).use { transaction =>
+        transactionManager.write(Domain.HR).use { transaction =>
           for {
             _ <- Async[F]
                    .delay {
@@ -189,7 +189,7 @@ class MigrationRepoImpl[F[_]: Async: Logger](
   private def insertJobsTypeDB() = getHrJobsStream
     .chunkN(1000)
     .parEvalMap(1) { chunk =>
-      transactionManager.write(UUID.randomUUID(), Domain.HR).use { transaction =>
+      transactionManager.write(Domain.HR).use { transaction =>
         for {
           _ <- Async[F]
                  .delay {
@@ -213,7 +213,7 @@ class MigrationRepoImpl[F[_]: Async: Logger](
   private def insertJobFunctionsTypeDB() = getHrJobFunctionsStream
     .chunkN(1000)
     .parEvalMap(1) { chunk =>
-      transactionManager.write(UUID.randomUUID(), Domain.HR).use { transaction =>
+      transactionManager.write(Domain.HR).use { transaction =>
         for {
           _ <- Async[F]
                  .delay {
@@ -251,7 +251,7 @@ class MigrationRepoImpl[F[_]: Async: Logger](
       "insert $function_jobs(function_role:$job_function,job_role: $job) isa function_jobs;"
     Vector(regionCities, cityLocations, locationDepartments, departmentEmployees, jobEmployees, functionJobs).foldMapA {
       insertQueryStr =>
-        transactionManager.write(UUID.randomUUID(), Domain.HR).use { transaction =>
+        transactionManager.write(Domain.HR).use { transaction =>
           for {
             _ <- Async[F]
                    .blocking {

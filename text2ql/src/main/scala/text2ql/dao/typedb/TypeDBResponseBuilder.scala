@@ -28,7 +28,6 @@ trait TypeDBResponseBuilder[F[_]] {
       logic: AggregationLogic,
       total: Long,
       domain: Domain,
-      nPrimaryColumns: Int,
       offset: Int,
       limit: Int
   ): F[Option[GridWithDataRenderTypeResponseModel]]
@@ -41,8 +40,7 @@ trait TypeDBResponseBuilder[F[_]] {
 
   def getCMAttributeStringValue(
       cm: ConceptMap,
-      attribute: String,
-      subAttribute: Option[String] = None
+      attribute: String
   ): String
 }
 
@@ -88,7 +86,7 @@ class TypeDBResponseBuilderImpl[F[_]: Sync](domainSchema: DomainSchemaService[F]
       logic: AggregationLogic,
       domain: Domain,
       isSortable: String => Boolean
-  ): F[(List[GridPropertyItemModel], List[ExtractedDataForAggregation])] = if (logic.unique) {
+  ): F[(List[GridPropertyItemModel], List[ExtractedDataForAggregation])] = if (logic.unique)
     logic.visualization.tags
       .traverse { attribute =>
         for {
@@ -102,14 +100,14 @@ class TypeDBResponseBuilderImpl[F[_]: Sync](domainSchema: DomainSchemaService[F]
         )
       }
       .map(_ -> List.empty)
-  } else {
+  else
     for {
-      aggregationOriginalName <- Sync[F].delay(logic.subAttrOpt.getOrElse(logic.groupByAttr.replaceAll("_iid", "")))
-      countingOriginalName    <- Sync[F].delay(logic.targetAttr.replaceAll("_iid", ""))
-      headlineAttribute        = logic.subAttrOpt.fold(logic.groupByAttr)(_ => logic.groupByAttr)
+      aggregationOriginalName <- Sync[F].delay(logic.groupByAttr)
+      countingOriginalName    <- Sync[F].delay(logic.targetAttr)
+      headlineAttribute        = logic.groupByAttr
       extractedData            = raw.map { cm =>
-                                   val aggregationValue = getCMAttributeStringValue(cm, logic.groupByAttr, logic.subAttrOpt)
-                                   val headlineValue    = getCMAttributeStringValue(cm, headlineAttribute, logic.subAttrOpt)
+                                   val aggregationValue = getCMAttributeStringValue(cm, logic.groupByAttr)
+                                   val headlineValue    = getCMAttributeStringValue(cm, headlineAttribute)
                                    ExtractedDataForAggregation(aggregationValue, headlineValue)
                                  }.toList
       aggregationTitle        <-
@@ -137,7 +135,6 @@ class TypeDBResponseBuilderImpl[F[_]: Sync](domainSchema: DomainSchemaService[F]
                                    )
                                  ) -> extractedData
     } yield result
-  }
 
   override def makeGrid(
       queryData: DataForDBQuery,
@@ -145,13 +142,12 @@ class TypeDBResponseBuilderImpl[F[_]: Sync](domainSchema: DomainSchemaService[F]
       logic: AggregationLogic,
       total: Long,
       domain: Domain,
-      nPrimaryColumns: Int,
       offset: Int,
       limit: Int
   ): F[Option[GridWithDataRenderTypeResponseModel]] = for {
     (properties, extractedData) <- makeGridProperties(queryData, raw, logic, domain, _ => true)
 
-    result <- if (logic.unique) {
+    result <- if (logic.unique)
                 for {
                   items <- raw.toList
                              .traverse { cm =>
@@ -169,16 +165,9 @@ class TypeDBResponseBuilderImpl[F[_]: Sync](domainSchema: DomainSchemaService[F]
                   items = items,
                   total = total
                 ).some
-              } else {
+              else
                 for {
-                  aggregationName <- logic.subAttrOpt.fold(logic.groupByAttr.replaceAll("_iid", "").pure[F])(sa =>
-                                       if (sa == DATE) logic.groupByAttr.pure[F]
-                                       else
-                                         for {
-                                           titleSA          <- domainSchema.thingTitle(sa, domain)
-                                           titleAggregation <- domainSchema.thingTitle(logic.groupByAttr, domain)
-                                         } yield s"$titleSA $titleAggregation"
-                                     )
+                  aggregationName <- logic.groupByAttr.replaceAll("_iid", "").pure[F]
                   attrs           <- domainSchema.attributesTitle(domain)
                   aggregationTitle = attrs.getOrElse(aggregationName, aggregationName)
                   aggregationBy    = aggregationTitle
@@ -205,7 +194,6 @@ class TypeDBResponseBuilderImpl[F[_]: Sync](domainSchema: DomainSchemaService[F]
                   title = s"Агрегация по $aggregationBy".some,
                   total = groupItems.size.toLong
                 ).some
-              }
   } yield result
 
   override def getCMAttributeValue(
@@ -220,26 +208,9 @@ class TypeDBResponseBuilderImpl[F[_]: Sync](domainSchema: DomainSchemaService[F]
 
   override def getCMAttributeStringValue(
       cm: ConceptMap,
-      attribute: String,
-      subAttribute: Option[String] = None
-  ): String = subAttribute match {
-    case Some(DAY)     =>
-      val raw = cm.get(attribute).asAttribute().getValue.toString
-      Try(LocalDateTime.parse(raw)).toOption.map(_.getDayOfMonth.toString).getOrElse(s"failed to get day from $raw")
-    case Some(WEEKDAY) =>
-      val raw = cm.get(attribute).asAttribute().getValue.toString
-      Try(LocalDateTime.parse(raw)).toOption
-        .map(_.getDayOfWeek.toString)
-        .getOrElse(s"failed to get weekday from $raw")
-    case Some(MONTH)   =>
-      val raw = cm.get(attribute).asAttribute().getValue.toString
-      Try(LocalDateTime.parse(raw)).toOption.map(_.getMonth.toString).getOrElse(s"failed to get month from $raw")
-    case Some(YEAR)    =>
-      val raw = cm.get(attribute).asAttribute().getValue.toString
-      Try(LocalDateTime.parse(raw)).toOption.map(_.getYear.toString).getOrElse(s"failed to get year from $raw")
-    case _             =>
-      if (attribute.endsWith("_iid")) cm.get(attribute.dropRight(4)).asThing().getIID
-      else cm.get(attribute).asAttribute().getValue.toString
-  }
+      attribute: String
+  ): String =
+    if (attribute.endsWith("_iid")) cm.get(attribute.dropRight(4)).asThing().getIID
+    else cm.get(attribute).asAttribute().getValue.toString
 
 }

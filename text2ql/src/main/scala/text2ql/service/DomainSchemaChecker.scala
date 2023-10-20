@@ -50,8 +50,7 @@ object DomainSchemaChecker {
     domainSchemaServ      <- DomainSchemaService[F]
     updater               <- QueryDataUpdater[F](domainSchemaServ)
     requestTypeCalculator <- UserRequestTypeCalculator[F](domainSchemaServ)
-    queryDataCalc         <-
-      QueryDataCalculator[F](updater, domainSchemaServ, requestTypeCalculator)
+    queryDataCalc         <- QueryDataCalculator[F](updater, requestTypeCalculator)
     qb                    <- QueryBuilder[F](domainSchemaServ, conf)
     rb                    <- ResponseBuilder[F](domainSchemaServ)
     repo                  <- DomainRepo[F](qb, qm, rb)
@@ -60,8 +59,7 @@ object DomainSchemaChecker {
     typeDBQueryBuilder <- TypeDBQueryBuilder[F](typeDBQueryHelper, domainSchemaServ)
     typeDBQueryManager <-
       TypeDBQueryManager[F](typeDBTransactionManager, typeDBQueryBuilder, typeDBQueryHelper, typeDBConf)
-
-    typeDBRepo <- TypeDBDomainRepo[F](typeDBQueryManager, typeDBTransactionManager, typeDBConf)
+    typeDBRepo         <- TypeDBDomainRepo[F](typeDBQueryManager, typeDBTransactionManager, typeDBConf)
 
   } yield new DomainSchemaCheckerImpl[F](queryDataCalc, repo, typeDBRepo, domainSchemaServ, qb)
 }

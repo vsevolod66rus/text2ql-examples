@@ -25,8 +25,7 @@ object App extends WSApp[ApplicationConfig] {
     domainSchema             <- DomainSchemaService[F]
     _                        <- QueryBuilder[F](domainSchema, conf.database.data)
     qm                       <- QueryManager[F](xaStorage)
-    typeDBClient             <-
-      Resource.fromAutoCloseable(Sync[F].delay(TypeDB.coreClient(s"${conf.typeDB.url}")))
+    typeDBClient             <- Resource.fromAutoCloseable(Sync[F].delay(TypeDB.coreClient(s"${conf.typeDB.url}")))
     typeDBTransactionManager <- TypeDBTransactionManager[F](typeDBClient, conf.typeDB)
     domainSchemaChecker      <- DomainSchemaChecker[F](qm, conf.database.data, typeDBTransactionManager, conf.typeDB)
     migrationRepo            <- MigrationRepo[F](xaStorage, typeDBTransactionManager, conf.database.data)

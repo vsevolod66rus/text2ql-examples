@@ -81,145 +81,121 @@ attributes:
     attribute_name: region_id
     attribute_type: string
     attribute_value: id
-    sort: 1
     title: Идентификатор региона
   - vertex_name: region
     attribute_name: region_code
     attribute_type: string
     attribute_value: code
-    sort: 2
     title: Код региона
   - vertex_name: region
     attribute_name: region_name
     attribute_type: string
     attribute_value: name
-    sort: 3
     title: Имя региона
   - vertex_name: city
     attribute_name: city_id
     attribute_type: string
     attribute_value: id
-    sort: 1
     title: Идентификатор города
   - vertex_name: city
     attribute_name: city_code
     attribute_type: string
     attribute_value: code
-    sort: 2
     title: Код города
   - vertex_name: city
     attribute_name: city_name
     attribute_type: string
     attribute_value: name
-    sort: 3
     title: Имя города
   - vertex_name: city
     attribute_name: city_id
     attribute_type: string
     attribute_value: id
-    sort: 1
     title: Идентификатор локации
   - vertex_name: location
     attribute_name: location_code
     attribute_type: string
     attribute_value: code
-    sort: 2
     title: Код локации
   - vertex_name: location
     attribute_name: location_name
     attribute_type: string
     attribute_value: name
-    sort: 3
     title: Имя локации
   - vertex_name: department
     attribute_name: department_id
     attribute_type: string
     attribute_value: id
-    sort: 1
     title: Идентификатор департамента
   - vertex_name: department
     attribute_name: department_code
     attribute_type: string
     attribute_value: code
-    sort: 2
     title: Код департамента
   - vertex_name: department
     attribute_name: department_name
     attribute_type: string
     attribute_value: name
-    sort: 3
     title: Имя департамента
   - vertex_name: department
     attribute_name: department_path
     attribute_type: string
     attribute_value: path
-    sort: 3
     title: Отношения подчиненности департамента
   - vertex_name: job_function
     attribute_name: job_function_id
     attribute_type: string
     attribute_value: id
-    sort: 1
     title: Идентификатор функции
   - vertex_name: job_function
     attribute_name: job_function_code
     attribute_type: string
     attribute_value: code
-    sort: 2
     title: Код функции
   - vertex_name: job_function
     attribute_name: job_function_name
     attribute_type: string
     attribute_value: name
-    sort: 3
     title: Имя функции
   - vertex_name: job
     attribute_name: job_id
     attribute_type: string
     attribute_value: id
-    sort: 1
     title: Идентификатор должности
   - vertex_name: job
     attribute_name: job_code
     attribute_type: string
     attribute_value: code
-    sort: 2
     title: Код дожности
   - vertex_name: job
     attribute_name: job_name
     attribute_type: string
     attribute_value: name
-    sort: 3
     title: Наименование должности
   - vertex_name: employee
     attribute_name: employee_id
     attribute_type: string
     attribute_value: id
-    sort: 1
     title: Идентификатор сотрудника
   - vertex_name: employee
     attribute_name: employee_name
     attribute_type: string
     attribute_value: name
-    sort: 3
     title: Имя сотрудника
   - vertex_name: employee
     attribute_name: employee_gender
     attribute_type: boolean
     attribute_value: gender
-    sort: 4
     title: Пол сотрудника
   - vertex_name: employee
     attribute_name: employee_email
     attribute_type: string
     attribute_value: email
-    sort: 5
     title: Почта сотрудника
   - vertex_name: employee
     attribute_name: employee_hired_date
     attribute_type: datetime
     attribute_value: hired_date
-    sort: 6
     title: Дата найма сотрудника
 edges:
   - from: region

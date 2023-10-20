@@ -67,10 +67,9 @@ final class TypeDBQueryManagerImpl[F[_]: Sync: Logger](
 
     isSortable                   = (attribute: String) => !attribute.endsWith("_iid")
     raw                          = iterator.asScala.toSeq
-    updatedLogic                 = logic.copy(subAttrOpt = None)
-    (properties, extractedData) <- queryHelper.makeGridProperties(queryData, raw, updatedLogic, domain, isSortable)
+    (properties, extractedData) <- queryHelper.makeGridProperties(queryData, raw, logic, domain, isSortable)
 
-    res = if (logic.unique) {
+    res = if (logic.unique)
             // left the chunkSize as 1 to be closer to the previous version implementation
             Stream.fromIterator(iterator = iterator.asScala, chunkSize = 1).map { cm =>
               Map("id" -> GridPropertyFilterValueString(java.util.UUID.randomUUID().toString)) ++
@@ -78,7 +77,7 @@ final class TypeDBQueryManagerImpl[F[_]: Sync: Logger](
                   GridPropertyFilterValueString(queryHelper.getCMAttributeStringValue(cm, prop.key))
                 }((_, value) => value)
             }
-          } else {
+          else {
             val groupItems = extractedData
               .groupBy(_.aggregationValue)
               .toList
@@ -101,7 +100,7 @@ final class TypeDBQueryManagerImpl[F[_]: Sync: Logger](
       logic: AggregationLogic,
       domain: Domain
   ): F[AskRepoResponse] = transactionManager
-    .read(queryData.requestId, domain)
+    .read(domain)
     .use { readTransaction =>
       val countF = getCount(queryData, logic, readTransaction, domain)
       for {
@@ -118,7 +117,7 @@ final class TypeDBQueryManagerImpl[F[_]: Sync: Logger](
         perPage = queryData.pagination.flatMap(_.perPage).getOrElse(conf.limit)
         offset  = page * perPage
         limit   = perPage
-        result <- if (queryResult.nonEmpty) {
+        result <- if (queryResult.nonEmpty)
                     queryHelper
                       .makeGrid(
                         queryData,
@@ -126,7 +125,6 @@ final class TypeDBQueryManagerImpl[F[_]: Sync: Logger](
                         logic,
                         count.countRecords,
                         domain,
-                        conf.nPrimaryColumns,
                         offset,
                         limit
                       )
@@ -137,7 +135,7 @@ final class TypeDBQueryManagerImpl[F[_]: Sync: Logger](
                           query = query.some
                         )
                       }
-                  } else AskRepoResponse(text = "По Вашему запросу данных не найдено.".some, count = count).pure[F]
+                  else AskRepoResponse(text = "По Вашему запросу данных не найдено.".some, count = count).pure[F]
       } yield result
     }
 
@@ -147,7 +145,7 @@ final class TypeDBQueryManagerImpl[F[_]: Sync: Logger](
       attrName: String,
       domain: Domain
   ): F[List[GridPropertyFilterValue]] = transactionManager
-    .read(queryData.requestId, domain)
+    .read(domain)
     .use(getAttributeValuesQuery(queryData, logic, _, attrName, domain))
 
   private def getAttributeValuesQuery(
@@ -174,25 +172,10 @@ final class TypeDBQueryManagerImpl[F[_]: Sync: Logger](
       readTransaction: TypeDBTransaction,
       domain: Domain
   ): F[CountQueryDTO] = {
-    val updatedEntityList   = queryData.entityList.map { e =>
-      val updatedAttributes = e.attributes.collect {
-        case a if a.attributeValues.exists(_.nonEmpty) => a.copy(includeGetClause = false)
-      }
-      e.copy(attributes = updatedAttributes, includeGetClause = true)
-    }
-    val updatedRelationList = queryData.relationList.map { r =>
-      val updatedAttributes =
-        r.attributes.collect {
-          case a if a.attributeValues.exists(_.nonEmpty) => a.copy(includeGetClause = false)
-        }
-      r.copy(attributes = updatedAttributes, includeGetClause = false)
-    }
 
-    val filteredData = queryData.copy(entityList = updatedEntityList, relationList = updatedRelationList)
-    val countClause  = "count;"
-
+    val countClause                     = "count;"
     def getQuery(desc: Boolean = false) = queryBuilder.build(
-      filteredData,
+      queryData,
       logic,
       unlimitedQuery = true,
       conf.limit,

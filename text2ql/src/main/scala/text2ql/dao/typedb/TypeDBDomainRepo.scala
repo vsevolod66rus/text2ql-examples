@@ -39,7 +39,7 @@ object TypeDBDomainRepo {
       conf: TypeDBConfig
   ): Resource[F, TypeDBDomainRepo[F]] =
     Resource.eval(
-      Semaphore[F](conf.maxConcurrentTypeDB.toLong)
+      Semaphore[F](conf.maxConcurrentTypeDB.longValue)
         .map(new TypeDBDomainRepoImpl(_, queryManager, transactionManager, conf))
     )
 }
@@ -86,7 +86,7 @@ class TypeDBDomainRepoImpl[F[+_]: Async: Logger](
       domain: Domain
   ): F[Stream[F, Map[String, GridPropertyFilterValue]]] = Async[F].delay {
     for {
-      readTransaction <- Stream.resource(transactionManager.read(queryData.requestId, domain))
+      readTransaction <- Stream.resource(transactionManager.read(domain))
       answer          <- Stream
                            .eval(
                              queryManager.streamQuery(

@@ -60,17 +60,13 @@ class UserRequestTypeCalculatorImpl[F[+_]: Sync](domainSchema: DomainSchemaServi
       groupByVertexName <- if (unique && groupByOpt.isEmpty) "".pure[F] else getTargetVertexName(groupByOpt, domain)
       groupByAttrName   <-
         if (unique && groupByOpt.isEmpty) "".pure[F] else getTargetAttrName(groupByOpt, domain, isGroupBy = true)
-      subAttrOpt         = (if (unique) None else groupByOpt.flatMap(_.findFirstNamedValue)).filter(dateAttributes.contains)
     } yield AggregationLogic(
       unique = unique,
       targetAttr = targetAttrName,
       targetThing = targetVertexName,
       groupByAttr = groupByAttrName,
       groupByThing = groupByVertexName,
-      subAttrOpt = subAttrOpt,
-      aggregationFilterOpt = None,
-      sortModelOpt = None,
-      requestType = userRequestType
+      sortModelOpt = None
     )
 
   private def getTargetVertexName(targetOpt: Option[ClarifiedNamedEntity], domain: Domain): F[String] = for {
@@ -81,8 +77,6 @@ class UserRequestTypeCalculatorImpl[F[+_]: Sync](domainSchema: DomainSchemaServi
                                targetEntity.findFirstNamedValue.traverse(v =>
                                  domainSchema.getThingByAttribute(domain)(v)
                                )
-                             case DATE_UNIT =>
-                               targetEntity.attributeSelected.traverse(v => domainSchema.getThingByAttribute(domain)(v))
                              case _         => domainSchema.getThingByAttribute(domain)(targetEntity.tag).map(_.some)
                            }
     targetEntityName    <-
@@ -103,7 +97,6 @@ class UserRequestTypeCalculatorImpl[F[+_]: Sync](domainSchema: DomainSchemaServi
                                    domainSchema.headlineAttributes(domain).map(_.getOrElse(v, v))
                                  }
                                else namedValue.traverse(v => domainSchema.thingKeys(domain).map(_.getOrElse(v, v)))
-                             case DATE_UNIT => targetEntity.attributeSelected.pure[F]
                              case _         => targetEntity.findFirstNamedValue.pure[F]
                            }
     targetAttrName      <-

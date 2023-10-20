@@ -16,8 +16,6 @@ trait DomainSchemaService[F[_]] {
   def schemaAttributesType(domain: Domain): F[Map[String, String]]
   def attributesTitle(domain: Domain): F[Map[String, String]]
   def headlineAttributes(domain: Domain): F[Map[String, String]]
-  def visualAttributes(domain: Domain): F[Seq[String]]
-  def visualAttributesSort(domain: Domain, attribute: String): F[Int]
   def from(domain: Domain, key: String, pgSchemaName: String): F[String]
   def select(domain: Domain, key: String): F[String]
   def where(domain: Domain, key: String): F[Option[String]]
@@ -39,7 +37,7 @@ trait DomainSchemaService[F[_]] {
 object DomainSchemaService {
 
   def apply[F[_]: Async]: Resource[F, DomainSchemaService[F]] = for {
-    domainSchemaHR   <- DomainSchema[F](Domain.HR)
+    domainSchemaHR <- DomainSchema[F](Domain.HR)
   } yield new DomainSchemaServiceImpl(domainSchemaHR)
 
   val attributesPriorityForQueryDataCalculating: Map[String, Int] = Map(
@@ -61,25 +59,11 @@ object DomainSchemaService {
   val A_VALUE       = "attribute_value"
   val E_TYPE        = "entity_type"
   val R_TYPE        = "relation_type"
-  val DATE_UNIT     = "date_unit"
   val CO            = "comparison_operator"
-  val EXIST_CONFIRM = "exist_confirmation"
-
-  val DATE    = "date"
-  val DAY     = "day"
-  val WEEKDAY = "weekday"
-  val MONTH   = "month"
-  val YEAR    = "year"
-  val FROM    = "from"
-  val TO      = "to"
 
   val TARGET      = "target"
   val AGGREGATION = "aggregation"
   val ARGUMENT    = "argument"
-  val dtTARGET    = "datetimeTarget"
-
-  val dateUnits: Map[String, String] =
-    Map("year" -> "year", "quarter" -> "quarter", "month" -> "month", "weekday" -> "isodow", "day" -> "day")
 
   val EXTREMUM                       = "extremum"
   val STATS                          = "stats"
@@ -87,7 +71,7 @@ object DomainSchemaService {
 
   val functionEntities: List[String] = List(EXTREMUM, STATS, CHART)
 
-  val slotsDoNotClarify: List[String] = List(A_VALUE, CO, EXIST_CONFIRM, "date_operator")
+  val slotsDoNotClarify: List[String] = List(A_VALUE, CO)
 
   lazy val defaultAttributesTitle: Map[String, String] = Map(
     "entity_type"         -> "Наименование сущности",
@@ -129,8 +113,8 @@ class DomainSchemaServiceImpl[F[_]: Async](
     domainSchemaHR: DomainSchema[F]
 ) extends DomainSchemaService[F] {
 
-  def toSchema: PartialFunction[Domain, DomainSchema[F]] = {
-    case Domain.HR   => domainSchemaHR
+  def toSchema: PartialFunction[Domain, DomainSchema[F]] = { case Domain.HR =>
+    domainSchemaHR
   }
 
   def uploadActive(domain: Domain, contentStream: fs2.Stream[F, Byte]): F[Unit] = for {
@@ -154,11 +138,6 @@ class DomainSchemaServiceImpl[F[_]: Async](
   def attributesTitle(domain: Domain): F[Map[String, String]] = toSchema(domain).attributesTitle
 
   def headlineAttributes(domain: Domain): F[Map[String, String]] = toSchema(domain).headlineAttributes
-
-  def visualAttributes(domain: Domain): F[Seq[String]] = toSchema(domain).visualAttributes.map(_.keySet.toSeq)
-
-  def visualAttributesSort(domain: Domain, attribute: String): F[Int] =
-    toSchema(domain).visualAttributes.map(_.getOrElse(attribute, Int.MaxValue))
 
   def from(domain: Domain, key: String, pgSchemaName: String): F[String] =
     toSchema(domain).from

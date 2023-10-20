@@ -3,51 +3,35 @@ package text2ql.api
 import io.circe.Codec
 import io.circe.generic.semiauto.deriveCodec
 import sttp.tapir.Schema
+import text2ql.domainschema.{DomainSchemaAttribute, DomainSchemaVertex}
 
 import java.util.UUID
-import scala.reflect.ClassTag
 
 case class DataForDBQuery(
     requestId: UUID,
+    domain: Domain,
     entityList: List[EntityForDBQuery],
     relationList: List[RelationForDBQuery],
     pagination: Option[ChatMessageRequestModel] = None,
-    logic: AggregationLogic,
-    count: Option[CountQueryDTO] = None,
-    domain: Domain,
-    requestType: UserRequestType
+    logic: AggregationLogic
 )
 
 case class EntityForDBQuery(
     entityName: String,
     attributes: List[AttributeForDBQuery] = List.empty[AttributeForDBQuery],
-    isParent: Boolean = false,
-    isTargetEntity: Boolean = false,
-    includeGetClause: Boolean
+    isTargetEntity: Boolean = false
 )
 
 case class RelationForDBQuery(
     relationName: String,
     attributes: List[AttributeForDBQuery] = List.empty[AttributeForDBQuery],
-    entities: List[String],
-    isTargetRelation: Boolean = false,
-    includeGetClause: Boolean
+    entities: List[String]
 )
 
 case class AttributeForDBQuery(
     attributeName: String,
-    includeGetClause: Boolean,
     attributeValues: Option[List[AttributeValue]] = None,
-    fullTextItems: List[FullTextItem] = List.empty[FullTextItem],
-    isTargetAttribute: Boolean = false,
-    isAttributeFromRequest: Boolean = false,
-    attributePriority: AttributePriority = DefaultPriority(),
-    datePart: Option[String] = None
-)
-
-case class AttributeForDBQueryWithThingName(
-    attribute: AttributeForDBQuery,
-    thingName: String
+    isTargetAttribute: Boolean = false
 )
 
 case class AttributeValue(
@@ -66,38 +50,18 @@ case class ExtractedDataForAggregation(
     headlineValue: String
 )
 
-sealed trait AttributePriority extends Product with Serializable
-
-case class GeneralizingEntityHeadlinePriority(priorityLevel: Int = 1, sort: Int) extends AttributePriority
-case class TargetEntityHeadlinePriority(priorityLevel: Int = 2, sort: Int)       extends AttributePriority
-case class TargetAttributePriority(priorityLevel: Int = 3)                       extends AttributePriority
-case class HeadlinePriority(priorityLevel: Int = 4, sort: Int)                   extends AttributePriority
-case class FromRequestPriority(priorityLevel: Int = 5)                           extends AttributePriority
-case class VisualPriority(priorityLevel: Int = 6, sort: Int)                     extends AttributePriority
-case class DefaultPriority(priorityLevel: Int = 7)                               extends AttributePriority
-
 case class AggregationLogic(
     unique: Boolean,
     targetAttr: String,
     targetThing: String,
     groupByAttr: String,
     groupByThing: String,
-    subAttrOpt: Option[String] = None,
-    aggregationFilterOpt: Option[AggregationFilter],
     sortModelOpt: Option[BaseSortModel],
-    visualization: TagsVisualization = TagsVisualization(),
-    distinct: Boolean = false,
-    requestType: UserRequestType = UserRequestType.GetInstanceList
-)
-
-case class AggregationFilter(
-    comparisonOperator: String,
-    value: String
+    visualization: TagsVisualization = TagsVisualization()
 )
 
 case class TagsVisualization(
-    tags: List[String] = List.empty[String],
-    nPrimaryTags: Int = 5
+    tags: List[String] = List.empty[String]
 )
 
 object DataForDBQuery {
@@ -125,24 +89,9 @@ object AttributeValue {
   implicit val schema: Schema[AttributeValue] = Schema.derived
 }
 
-object AttributePriority {
-  implicit val codec: Codec[AttributePriority]   = deriveCodec
-  implicit val schema: Schema[AttributePriority] = Schema.derived
-
-  def filterPriority[T <: AttributePriority: ClassTag](t: AttributePriority): Boolean = t match {
-    case _: T => true
-    case _    => false
-  }
-}
-
 object AggregationLogic {
   implicit val codec: Codec[AggregationLogic]   = deriveCodec
   implicit val schema: Schema[AggregationLogic] = Schema.derived
-}
-
-object AggregationFilter {
-  implicit val codec: Codec[AggregationFilter]   = deriveCodec
-  implicit val schema: Schema[AggregationFilter] = Schema.derived
 }
 
 object TagsVisualization {

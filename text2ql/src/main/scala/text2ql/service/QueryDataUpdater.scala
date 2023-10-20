@@ -69,17 +69,12 @@ class QueryDataUpdaterImpl[F[+_]: Async](domainSchema: DomainSchemaService[F]) e
     for {
       entities        <- clarifiedEntities.filter(_.tag == slotName).pure[F]
       attributeValues <- entities.traverse(collectAttributeValues).map(_.flatten)
-      visual          <- domainSchema.visualAttributes(domain).map(_.contains(slotName))
-      fullTextItems    = entities.flatMap(_.fullTextItems)
       attributes       = entities.map { e =>
                            val isTargetRoleRole = e.isTarget
                            AttributeForDBQuery(
                              attributeName = slotName,
                              attributeValues = attributeValues.some,
-                             fullTextItems = fullTextItems,
-                             includeGetClause = visual,
-                             isTargetAttribute = isTargetRoleRole,
-                             isAttributeFromRequest = true
+                             isTargetAttribute = isTargetRoleRole
                            )
                          }
       res             <- attributes.foldLeftM(currentDataForQuery) { (acc, el) =>
@@ -93,8 +88,7 @@ class QueryDataUpdaterImpl[F[+_]: Async](domainSchema: DomainSchemaService[F]) e
       clarifiedEntities: List[ClarifiedNamedEntity]
   ): F[DataForDBQuery] = {
     def collectAttributeForQuery(
-        attributeTypeEntity: ClarifiedNamedEntity,
-        visualAttributes: Seq[String]
+        attributeTypeEntity: ClarifiedNamedEntity
     ): List[AttributeForDBQuery] =
       clarifiedEntities
         .filter(_.filterByTagAndValueOpt(A_TYPE, attributeTypeEntity.originalValue.some))
@@ -105,24 +99,19 @@ class QueryDataUpdaterImpl[F[+_]: Async](domainSchema: DomainSchemaService[F]) e
             .filter(_.filterByGroupOpt(attributeTypeEntity.group))
           val isTargetRoleRole   = attributeTypeEntity.isTarget
           val comparisonOperator = getComparisonOperator(clarifiedEntities, attributeTypeEntity)
-          val visual             = visualAttributes.contains(name)
           AttributeForDBQuery(
             attributeName = name,
             attributeValues = ownEntities.map(_.originalValue).toList.map(AttributeValue(_, comparisonOperator)).some,
-            fullTextItems = ownEntities.toList.flatMap(_.fullTextItems),
-            includeGetClause = visual,
-            isTargetAttribute = isTargetRoleRole,
-            isAttributeFromRequest = true
+            isTargetAttribute = isTargetRoleRole
           )
         }
 
     for {
-      domain                         <- currentDataForQuery.domain.pure[F]
-      visualAttributes               <- domainSchema.visualAttributes(domain)
-      attributesFromAttributeTypeSlot = clarifiedEntities
-                                          .filter(_.tag == A_TYPE)
-                                          .flatMap(collectAttributeForQuery(_, visualAttributes))
-      res                            <- attributesFromAttributeTypeSlot.foldLeftM(currentDataForQuery)(chunkUpdateDataForQueryWithAttributeType)
+      attributesFromAttributeTypeSlot <- clarifiedEntities
+                                           .filter(_.tag == A_TYPE)
+                                           .flatMap(collectAttributeForQuery)
+                                           .pure[F]
+      res                             <- attributesFromAttributeTypeSlot.foldLeftM(currentDataForQuery)(chunkUpdateDataForQueryWithAttributeType)
     } yield res
   }
 
@@ -132,9 +121,7 @@ class QueryDataUpdaterImpl[F[+_]: Async](domainSchema: DomainSchemaService[F]) e
       entity: ThingWithOriginalName
   ): F[DataForDBQuery] = for {
     entityName            <- entity.thingName.pure[F]
-    domain                 = currentDataForQuery.domain
-    keyAttr               <- domainSchema.thingKeys(domain).map(_.get(entityName))
-    entityAttributesNames <- domainSchema.getAttributesByThing(domain)(entityName)
+    entityAttributesNames <- domainSchema.getAttributesByThing(currentDataForQuery.domain)(entityName)
     isTargetRole           = clarifiedEntities
                                .filter(_.isTarget)
                                .exists(_.filterByTagAndValueOpt(E_TYPE, entity.originalName.some))
@@ -144,40 +131,35 @@ class QueryDataUpdaterImpl[F[+_]: Async](domainSchema: DomainSchemaService[F]) e
                                .pure[F]
                                .ifM(
                                  for {
-                                   entityAttributes <-
-                                     domainSchema.visualAttributes(domain).map { attrs =>
-                                       entityAttributesNames
-                                         .map { a =>
-                                           AttributeForDBQuery(
-                                             attributeName = a,
-                                             includeGetClause = attrs.contains(a) || keyAttr.contains(a)
-                                           )
-                                         }
-                                     }
+                                   entityAttributes <- entityAttributesNames.map(a => AttributeForDBQuery(attributeName = a)).pure[F]
                                    newEntity         = currentEntityInDataOpt.fold(
                                                          EntityForDBQuery(
                                                            entityName = entityName,
                                                            attributes = entityAttributes,
-                                                           includeGetClause = true,
                                                            isTargetEntity = isTargetRole
                                                          )
-                                                       )(e => e.copy(includeGetClause = true, isTargetEntity = isTargetRole))
+                                                       )(e => e.copy(isTargetEntity = isTargetRole))
                                    res              <-
                                      currentDataForQuery
                                        .copy(entityList = restEntities.filterNot(_.entityName == newEntity.entityName) :+ newEntity)
                                        .pure[F]
                                  } yield res,
-                                 buildEmptyEntityAttrs(entityAttributesNames, entityName, domain)
+                                 entityAttributesNames
+                                   .map { a =>
+                                     AttributeForDBQuery(
+                                       attributeName = a
+                                     )
+                                   }
+                                   .pure[F]
                                    .map { attrs =>
                                      currentDataForQuery
                                        .copy(entityList =
                                          restEntities :+ currentEntityInDataOpt.fold(
                                            EntityForDBQuery(
                                              entityName = entityName,
-                                             attributes = attrs,
-                                             includeGetClause = true
+                                             attributes = attrs
                                            )
-                                         )(e => e.copy(includeGetClause = true))
+                                         )(identity)
                                        )
                                    }
                                )
@@ -196,7 +178,11 @@ class QueryDataUpdaterImpl[F[+_]: Async](domainSchema: DomainSchemaService[F]) e
                                   attrs <- domainSchema
                                              .getAttributesByThing(domain)(entityOrRelationName)
                                              .map(_.filter(_ != filterFromAttributeType.attributeName))
-                                  res   <- buildEmptyEntityAttrs(attrs, entityOrRelationName, domain)
+                                  res    = attrs.map { a =>
+                                             AttributeForDBQuery(
+                                               attributeName = a
+                                             )
+                                           }
                                 } yield res,
                                 List.empty[AttributeForDBQuery].pure[F]
                               )
@@ -209,7 +195,6 @@ class QueryDataUpdaterImpl[F[+_]: Async](domainSchema: DomainSchemaService[F]) e
                                            EntityForDBQuery(
                                              entityName = entityName,
                                              attributes = filterFromAttributeType +: restAttributes,
-                                             includeGetClause = true,
                                              isTargetEntity = filterFromAttributeType.isTargetAttribute
                                            )
                                          ) { e =>
@@ -241,22 +226,5 @@ class QueryDataUpdaterImpl[F[+_]: Async](domainSchema: DomainSchemaService[F]) e
       .map(_.getFirstNamedValue)
       .getOrElse("=")
   }
-
-  private def buildEmptyEntityAttrs(
-      attrNames: List[String],
-      entityName: String,
-      domain: Domain
-  ): F[List[AttributeForDBQuery]] = for {
-    headlinesMap <- domainSchema.headlineAttributes(domain)
-    keyAttrOpt   <- domainSchema.thingKeys(domain).map(_.get(entityName))
-    headlineOpt   = headlinesMap.get(entityName)
-    visual       <- domainSchema.visualAttributes(domain).map(_.toSet)
-    res           = attrNames.map { a =>
-                      AttributeForDBQuery(
-                        attributeName = a,
-                        includeGetClause = headlineOpt.contains(a) || keyAttrOpt.contains(a) || visual.contains(a)
-                      )
-                    }
-  } yield res
 
 }

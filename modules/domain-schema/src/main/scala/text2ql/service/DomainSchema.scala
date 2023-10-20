@@ -14,7 +14,6 @@ trait DomainSchema[F[_]] {
   def schemaAttributesType: F[Map[String, String]]
   def vertices: F[Vector[DomainSchemaVertex]]
   def attributesTitle: F[Map[String, String]]
-  def visualAttributes: F[Map[String, Int]]
   def headlineAttributes: F[Map[String, String]]
   def from: F[Map[String, String]]
   def select: F[Map[String, String]]
@@ -55,10 +54,6 @@ object DomainSchema {
       makeMapFromAttrs(a => a.attributeName -> a.title) ++
       makeMapFromThings(th => th.vertexName -> th.title)
 
-    lazy val visualAttributes: Map[String, Int]      = domainSchemaDTO.attributes.collect {
-      case a if a.sort.nonEmpty => a.attributeName -> a.sort.getOrElse(Int.MaxValue)
-    }.toMap
-
     lazy val headerAttributesMap: Map[String, String] = makeMapFromThings(th =>
       th.vertexName -> domainSchemaDTO.attributes
         .filter(_.vertexName == th.vertexName)
@@ -98,11 +93,6 @@ object DomainSchema {
         thing -> attrs.map(_.attributeName).toSet
       }
 
-    lazy val alternatives: Map[String, String] =
-      makeMapFromThingsWithOption(t => t.vertexName -> t.alternatives) ++ makeMapFromAttrsWithOption(a =>
-        a.attributeName -> a.alternatives
-      )
-
     private def makeMapFromThings[K, V](f: DomainSchemaVertex => (K, V)): Map[K, V] =
       domainSchemaDTO.vertices.map(f).toMap
 
@@ -135,7 +125,6 @@ final class DomainSchemaImpl[F[_]: Async](domainSchemaRef: Ref[F, Option[DomainS
   override val vertices: F[Vector[DomainSchemaVertex]]      = domainSchema.map(_.vertices)
   override val schemaAttributesType: F[Map[String, String]] = domainSchema.map(_.attributesTypeMap)
   override val attributesTitle: F[Map[String, String]]      = domainSchema.map(_.attributesTitleMap)
-  override val visualAttributes: F[Map[String, Int]]        = domainSchema.map(_.visualAttributes)
   override val headlineAttributes: F[Map[String, String]]   = domainSchema.map(_.headerAttributesMap)
   override val from: F[Map[String, String]]                 = domainSchema.map(_.from)
   override val select: F[Map[String, String]]               = domainSchema.map(_.select)

@@ -43,7 +43,6 @@ class TypeDBQueryBuilderImpl[F[_]: Sync](queryHelper: TypeDBResponseBuilder[F], 
   ): F[String] = {
     val queryData = addRelations(queryDataRaw)
     queryData.entityList
-      .filter(_.includeGetClause)
       .traverse(e => domainSchema.headlineAttributes(domain).map(_.get(e.entityName)))
       .map(_.flatten)
       .flatMap { headlines =>
@@ -87,19 +86,14 @@ class TypeDBQueryBuilderImpl[F[_]: Sync](queryHelper: TypeDBResponseBuilder[F], 
             if (relation.attributes.isEmpty) "".pure[F]
             else queryHelper.collectAggregateClause(relation.attributes, domain)
 
-          attributesClauseF.map { attributesClause =>
-            query + addRelation + addAttributeNames + attributesClause
-          }
+          attributesClauseF.map(attributesClause => query + addRelation + addAttributeNames + attributesClause)
         }
         val getClause       = "get " + {
           queryData.entityList
-            .filter(_.includeGetClause)
-            .filter(e => if (countDistinctQuery) e.isTargetEntity else true)
             .map(_.entityName) ++ queryData.entityList
             .flatMap(_.attributes)
             .filter(a => attributesToIncludeToQuery.contains(a.attributeName))
             .map(_.attributeName) ++ queryData.relationList
-            .filter(r => if (countDistinctQuery) r.isTargetRelation else r.includeGetClause)
             .map(_.relationName) ++ queryData.relationList
             .flatMap(_.attributes)
             .filter(a => attributesToIncludeToQuery.contains(a.attributeName))
@@ -107,20 +101,16 @@ class TypeDBQueryBuilderImpl[F[_]: Sync](queryHelper: TypeDBResponseBuilder[F], 
         }.distinct.map(s => s"$$$s").mkString(", ") + ";"
         val offsetClause    =
           if (unlimitedQuery) ""
-          else {
-            if (logic.unique) {
-              queryData.pagination
-                .flatMap(_.page)
-                .fold("")(page => s"offset ${page * queryData.pagination.flatMap(_.perPage).getOrElse(configLimit)};")
-            } else ""
-          }
+          else if (logic.unique)
+            queryData.pagination
+              .flatMap(_.page)
+              .fold("")(page => s"offset ${page * queryData.pagination.flatMap(_.perPage).getOrElse(configLimit)};")
+          else ""
         val limitClause     =
           if (unlimitedQuery) ""
-          else {
-            if (logic.unique)
-              queryData.pagination.flatMap(_.perPage).fold(s"limit $configLimit;")(limit => s"limit $limit;")
-            else ""
-          }
+          else if (logic.unique)
+            queryData.pagination.flatMap(_.perPage).fold(s"limit $configLimit;")(limit => s"limit $limit;")
+          else ""
 
         for {
           entityClause   <- entityClauseF
@@ -135,7 +125,7 @@ class TypeDBQueryBuilderImpl[F[_]: Sync](queryHelper: TypeDBResponseBuilder[F], 
       relationsMap
         .filter { case (_, v) => v.subsetOf(queryData.entityList.map(_.entityName).toSet) }
         .map { case (k, v) =>
-          RelationForDBQuery(relationName = k, entities = v.toList, includeGetClause = true)
+          RelationForDBQuery(relationName = k, entities = v.toList)
         }
         .toList
     queryData.copy(relationList = relations)

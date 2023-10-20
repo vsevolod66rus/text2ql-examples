@@ -4,7 +4,6 @@ import cats.effect.{Async, Resource}
 import cats.implicits._
 import text2ql.api._
 import text2ql.service.DomainSchemaService
-import text2ql.service.DomainSchemaService._
 
 trait ResponseBuilder[F[_]] {
 
@@ -47,12 +46,7 @@ class ResponseBuilderImpl[F[_]: Async](
       countQueryDTO: CountQueryDTO
   ): F[AskRepoResponse] = {
     val count = countQueryDTO.countGroups.getOrElse(countQueryDTO.countRecords)
-    val gridF = queryData.requestType match {
-      case UserRequestType.Undefined              => makeGrid(generalQueryDTO, queryData, count)
-      case UserRequestType.GetInstanceList        => makeGrid(generalQueryDTO, queryData, count)
-      case UserRequestType.CountInstancesInGroups => makeGrid(generalQueryDTO, queryData, count)
-    }
-    gridF.map(toAskResponse(countQueryDTO, buildQueryDTO.generalQuery, queryData))
+    makeGrid(generalQueryDTO, queryData, count).map(toAskResponse(countQueryDTO, buildQueryDTO.generalQuery, queryData))
   }
 
   override def makeGridProperties(
@@ -63,7 +57,7 @@ class ResponseBuilderImpl[F[_]: Async](
 
   override def toItem(headers: Vector[String], properties: List[GridPropertyItemModel], domain: Domain)(
       row: Vector[String]
-  ): F[Map[String, GridPropertyFilterValue]]         =
+  ): F[Map[String, GridPropertyFilterValue]] =
     properties
       .traverse(prop => getAttributeValue(headers, prop.key, domain)(row).map(v => prop.key -> v))
       .map(_.groupMapReduce(_._1)(_._2)((_, v) => v))
@@ -113,7 +107,7 @@ class ResponseBuilderImpl[F[_]: Async](
       logic: AggregationLogic,
       domain: Domain
   ): F[List[GridPropertyItemModel]] = for {
-    aggregationOriginalName <- Async[F].delay(logic.subAttrOpt.getOrElse(logic.groupByThing))
+    aggregationOriginalName <- Async[F].delay(logic.groupByThing)
     countingOriginalName     = logic.targetThing
     aggregationTitle        <-
       domainSchema.attributesTitle(domain).map(_.getOrElse(aggregationOriginalName, aggregationOriginalName))
@@ -166,14 +160,7 @@ class ResponseBuilderImpl[F[_]: Async](
       total: Long,
       domain: Domain
   ): F[GridWithDataRenderTypeResponseModel] = for {
-    aggregationName  <- logic.subAttrOpt.fold(logic.groupByAttr.pure[F])(sa =>
-                          if (sa == DATE) logic.groupByAttr.pure[F]
-                          else
-                            for {
-                              th1 <- domainSchema.thingTitle(sa, domain)
-                              th2 <- domainSchema.thingTitle(logic.groupByAttr, domain)
-                            } yield s"$th1 $th2"
-                        )
+    aggregationName  <- logic.groupByAttr.pure[F]
     aggregationTitle <- domainSchema.attributesTitle(domain).map(_.getOrElse(aggregationName, aggregationName))
     aggregationBy     = aggregationTitle
   } yield GridWithDataRenderTypeResponseModel(
