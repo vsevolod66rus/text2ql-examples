@@ -72,12 +72,12 @@ class UserRequestTypeCalculatorImpl[F[+_]: Sync](domainSchema: DomainSchemaServi
   private def getTargetVertexName(targetOpt: Option[ClarifiedNamedEntity], domain: Domain): F[String] = for {
     targetEntity        <- Sync[F].fromOption(targetOpt, ServerErrorWithMessage("no target entity from nlp"))
     targetEntityNameOpt <- targetEntity.tag match {
-                             case E_TYPE    => targetEntity.findFirstNamedValue.pure[F]
-                             case A_TYPE    =>
+                             case E_TYPE => targetEntity.findFirstNamedValue.pure[F]
+                             case A_TYPE =>
                                targetEntity.findFirstNamedValue.traverse(v =>
                                  domainSchema.getThingByAttribute(domain)(v)
                                )
-                             case _         => domainSchema.getThingByAttribute(domain)(targetEntity.tag).map(_.some)
+                             case _      => domainSchema.getThingByAttribute(domain)(targetEntity.tag).map(_.some)
                            }
     targetEntityName    <-
       Sync[F].fromOption(targetEntityNameOpt, ServerErrorWithMessage("no selected value for target entity"))
@@ -90,14 +90,11 @@ class UserRequestTypeCalculatorImpl[F[+_]: Sync](domainSchema: DomainSchemaServi
   ): F[String] = for {
     targetEntity        <- Sync[F].fromOption(targetOpt, ServerErrorWithMessage("no target entity from nlp"))
     targetEntityNameOpt <- targetEntity.tag match {
-                             case E_TYPE    =>
+                             case E_TYPE =>
                                val namedValue = targetEntity.findFirstNamedValue
-                               if (isGroupBy)
-                                 namedValue.traverse { v =>
-                                   domainSchema.headlineAttributes(domain).map(_.getOrElse(v, v))
-                                 }
+                               if (isGroupBy) namedValue.pure[F]
                                else namedValue.traverse(v => domainSchema.thingKeys(domain).map(_.getOrElse(v, v)))
-                             case _         => targetEntity.findFirstNamedValue.pure[F]
+                             case _      => targetEntity.findFirstNamedValue.pure[F]
                            }
     targetAttrName      <-
       Sync[F].fromOption(targetEntityNameOpt, ServerErrorWithMessage("no selected value for target attr"))

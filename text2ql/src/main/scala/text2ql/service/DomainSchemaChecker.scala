@@ -74,7 +74,7 @@ class DomainSchemaCheckerImpl[F[+_]: Async](
 
   def baseCheck(domain: Domain, content: Stream[F, Byte]): F[List[CheckDomainSchemaResponse]] = for {
     _             <- content.through(text.utf8.decode).compile.string.flatMap(domainSchema.update(domain, _))
-    entityNames   <- domainSchema.vertices(domain).map(_.map(_.vertexName).toList)
+    entityNames   <- domainSchema.vertices(domain).map(_.keySet.toList)
     samples        = buildClarifiedEntities(entityNames.map(List(_)))
     queryDataList <- samples.traverse(e => queryDataCalculator.prepareDataForQuery(e, baseUserReq, domain))
     res           <- askQueries(queryDataList)
@@ -87,7 +87,7 @@ class DomainSchemaCheckerImpl[F[+_]: Async](
       content: Stream[F, Byte]
   ): F[List[CheckDomainSchemaResponse]] = for {
     _                   <- content.through(text.utf8.decode).compile.string.flatMap(domainSchema.update(domain, _))
-    entityNames         <- domainSchema.vertices(domain).map(_.map(_.vertexName).toList).map { lst =>
+    entityNames         <- domainSchema.vertices(domain).map(_.keySet.toList).map { lst =>
                              if (entities.nonEmpty) lst.filter(entities.contains) else lst
                            }
     entitiesSeq          = if (onlySet) List(entityNames) else (1 to entityNames.size).flatMap(entityNames.combinations).toList
@@ -101,7 +101,7 @@ class DomainSchemaCheckerImpl[F[+_]: Async](
 
   def baseCheckTypeDB(domain: Domain, content: Stream[F, Byte]): F[List[CheckDomainSchemaResponse]] = for {
     _             <- content.through(text.utf8.decode).compile.string.flatMap(domainSchema.update(domain, _))
-    entityNames   <- domainSchema.vertices(domain).map(_.map(_.vertexName).toList)
+    entityNames   <- domainSchema.vertices(domain).map(_.keySet.toList)
     samples        = buildClarifiedEntities(entityNames.map(List(_)))
     queryDataList <- samples.traverse(e => queryDataCalculator.prepareDataForQuery(e, baseUserReq, domain))
     res           <- askQueriesTypeDB(queryDataList)
@@ -114,7 +114,7 @@ class DomainSchemaCheckerImpl[F[+_]: Async](
       content: Stream[F, Byte]
   ): F[List[CheckDomainSchemaResponse]] = for {
     _                   <- content.through(text.utf8.decode).compile.string.flatMap(domainSchema.update(domain, _))
-    entityNames         <- domainSchema.vertices(domain).map(_.map(_.vertexName).toList).map { lst =>
+    entityNames         <- domainSchema.vertices(domain).map(_.keySet.toList).map { lst =>
                              if (entities.nonEmpty) lst.filter(entities.contains) else lst
                            }
     entitiesSeq          = if (onlySet) List(entityNames) else (1 to entityNames.size).flatMap(entityNames.combinations).toList

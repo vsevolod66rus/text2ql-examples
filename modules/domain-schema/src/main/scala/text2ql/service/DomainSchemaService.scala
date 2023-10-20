@@ -12,17 +12,9 @@ trait DomainSchemaService[F[_]] {
   def uploadActive(domain: Domain, contentStream: fs2.Stream[F, Byte]): F[Unit]
   def update(domain: Domain, domainSchemaContent: String): F[Unit]
   def toSchema: PartialFunction[Domain, DomainSchema[F]]
-  def vertices(domain: Domain): F[Vector[DomainSchemaVertex]]
+  def vertices(domain: Domain): F[Map[String, DomainSchemaVertex]]
   def schemaAttributesType(domain: Domain): F[Map[String, String]]
   def attributesTitle(domain: Domain): F[Map[String, String]]
-  def headlineAttributes(domain: Domain): F[Map[String, String]]
-  def from(domain: Domain, key: String, pgSchemaName: String): F[String]
-  def select(domain: Domain, key: String): F[String]
-  def where(domain: Domain, key: String): F[Option[String]]
-  def join(domain: Domain, key: String): F[Option[String]]
-  def groupBy(domain: Domain, key: String): F[Option[String]]
-  def having(domain: Domain, key: String): F[Option[String]]
-  def orderBy(domain: Domain, key: String): F[Option[String]]
   def sqlNames(domain: Domain, key: String): F[String]
   def sqlNamesMap(domain: Domain): F[Map[String, String]]
   def edges(domain: Domain): F[List[DomainSchemaEdge]]
@@ -55,19 +47,19 @@ object DomainSchemaService {
     "datetimeTarget"
   )
 
-  val A_TYPE        = "attribute_type"
-  val A_VALUE       = "attribute_value"
-  val E_TYPE        = "entity_type"
-  val R_TYPE        = "relation_type"
-  val CO            = "comparison_operator"
+  val A_TYPE  = "attribute_type"
+  val A_VALUE = "attribute_value"
+  val E_TYPE  = "entity_type"
+  val R_TYPE  = "relation_type"
+  val CO      = "comparison_operator"
 
   val TARGET      = "target"
   val AGGREGATION = "aggregation"
   val ARGUMENT    = "argument"
 
-  val EXTREMUM                       = "extremum"
-  val STATS                          = "stats"
-  val CHART                          = "chart"
+  val EXTREMUM = "extremum"
+  val STATS    = "stats"
+  val CHART    = "chart"
 
   val functionEntities: List[String] = List(EXTREMUM, STATS, CHART)
 
@@ -131,31 +123,11 @@ class DomainSchemaServiceImpl[F[_]: Async](
 
   def update(domain: Domain, domainSchemaContent: String): F[Unit] = toSchema(domain).update(domainSchemaContent)
 
-  def vertices(domain: Domain): F[Vector[DomainSchemaVertex]] = toSchema(domain).vertices
+  def vertices(domain: Domain): F[Map[String, DomainSchemaVertex]] = toSchema(domain).vertices
 
   def schemaAttributesType(domain: Domain): F[Map[String, String]] = toSchema(domain).schemaAttributesType
 
   def attributesTitle(domain: Domain): F[Map[String, String]] = toSchema(domain).attributesTitle
-
-  def headlineAttributes(domain: Domain): F[Map[String, String]] = toSchema(domain).headlineAttributes
-
-  def from(domain: Domain, key: String, pgSchemaName: String): F[String] =
-    toSchema(domain).from
-      .map(_.getOrElse(key, s"from for $key not found"))
-      .map(ch => if (ch.toLowerCase.contains("union all")) ch else s"$pgSchemaName.$ch")
-
-  def select(domain: Domain, key: String): F[String] =
-    toSchema(domain).select.map(_.getOrElse(key, s"select for $key not found"))
-
-  def where(domain: Domain, key: String): F[Option[String]] = toSchema(domain).where.map(_.get(key))
-
-  def join(domain: Domain, key: String): F[Option[String]] = toSchema(domain).join.map(_.get(key))
-
-  def groupBy(domain: Domain, key: String): F[Option[String]] = toSchema(domain).groupBy.map(_.get(key))
-
-  def having(domain: Domain, key: String): F[Option[String]] = toSchema(domain).having.map(_.get(key))
-
-  def orderBy(domain: Domain, key: String): F[Option[String]] = toSchema(domain).orderBy.map(_.get(key))
 
   def sqlNames(domain: Domain, key: String): F[String] =
     toSchema(domain).sqlNames.map(_.getOrElse(key, key))

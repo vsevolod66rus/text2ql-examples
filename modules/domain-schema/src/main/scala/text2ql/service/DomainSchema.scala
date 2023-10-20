@@ -12,16 +12,8 @@ import text2ql.service.DomainSchemaService.defaultAttributesTitle
 trait DomainSchema[F[_]] {
   def update(domainSchema: String): F[Unit]
   def schemaAttributesType: F[Map[String, String]]
-  def vertices: F[Vector[DomainSchemaVertex]]
+  def vertices: F[Map[String, DomainSchemaVertex]]
   def attributesTitle: F[Map[String, String]]
-  def headlineAttributes: F[Map[String, String]]
-  def from: F[Map[String, String]]
-  def select: F[Map[String, String]]
-  def where: F[Map[String, String]]
-  def join: F[Map[String, String]]
-  def groupBy: F[Map[String, String]]
-  def having: F[Map[String, String]]
-  def orderBy: F[Map[String, String]]
   def sqlNames: F[Map[String, String]]
   def edges: F[List[DomainSchemaEdge]]
   def thingKeys: F[Map[String, String]]
@@ -34,7 +26,7 @@ object DomainSchema {
   def apply[F[_]: Async](domain: Domain): Resource[F, DomainSchema[F]] =
     Resource.eval {
       for {
-        raw              <- "".pure[F] //from db
+        raw              <- "".pure[F] // from db
         maybeJson         = yamlParser.parse(raw).some
         maybeDomainSchema = maybeJson.flatMap(_.toOption.flatMap(_.as[DomainSchemaDTO].toOption))
         domainSchema      = maybeDomainSchema.map(new DomainSchemaInternal(_))
@@ -44,7 +36,7 @@ object DomainSchema {
 
   final class DomainSchemaInternal(domainSchemaDTO: DomainSchemaDTO) {
 
-    lazy val vertices: Vector[DomainSchemaVertex] = domainSchemaDTO.vertices.toVector
+    lazy val vertices: Map[String, DomainSchemaVertex] = domainSchemaDTO.vertices.map(v => v.vertexName -> v).toMap
 
     lazy val attributes: Seq[DomainSchemaAttribute] = domainSchemaDTO.attributes
 
@@ -53,22 +45,6 @@ object DomainSchema {
     lazy val attributesTitleMap: Map[String, String] = defaultAttributesTitle ++
       makeMapFromAttrs(a => a.attributeName -> a.title) ++
       makeMapFromThings(th => th.vertexName -> th.title)
-
-    lazy val headerAttributesMap: Map[String, String] = makeMapFromThings(th =>
-      th.vertexName -> domainSchemaDTO.attributes
-        .filter(_.vertexName == th.vertexName)
-        .find(_.attributeValue == th.header)
-        .map(_.attributeName)
-        .getOrElse(th.header)
-    )
-
-    lazy val from: Map[String, String]    = makeMapFromThings(th => th.vertexName -> th.from)
-    lazy val select: Map[String, String]  = makeMapFromThings(th => th.vertexName -> th.select)
-    lazy val where: Map[String, String]   = makeMapFromThingsWithOption(th => th.vertexName -> th.where)
-    lazy val join: Map[String, String]    = makeMapFromThingsWithOption(th => th.vertexName -> th.join)
-    lazy val groupBy: Map[String, String] = makeMapFromThingsWithOption(th => th.vertexName -> th.groupBy)
-    lazy val having: Map[String, String]  = makeMapFromThingsWithOption(th => th.vertexName -> th.having)
-    lazy val orderBy: Map[String, String] = makeMapFromThingsWithOption(th => th.vertexName -> th.orderBy)
 
     lazy val sqlNames: Map[String, String] = makeMapFromAttrs(a => a.attributeName -> a.attributeValue)
 
@@ -102,7 +78,7 @@ object DomainSchema {
     private def makeMapFromAttrsWithOption[K, V](f: DomainSchemaAttribute => (K, Option[V])): Map[K, V] =
       domainSchemaDTO.attributes.map(f).collect { case (key, Some(value)) => (key, value) }.toMap
 
-    private def makeMapFromThingsWithOption[K, V](f: DomainSchemaVertex => (K, Option[V])): Map[K, V]   =
+    private def makeMapFromThingsWithOption[K, V](f: DomainSchemaVertex => (K, Option[V])): Map[K, V] =
       domainSchemaDTO.vertices.map(f).collect { case (key, Some(value)) => (key, value) }.toMap
 
   }
@@ -122,17 +98,9 @@ final class DomainSchemaImpl[F[_]: Async](domainSchemaRef: Ref[F, Option[DomainS
     _               <- domainSchemaRef.set(Some(new DomainSchemaInternal(newDomainSchema)))
   } yield ()
 
-  override val vertices: F[Vector[DomainSchemaVertex]]      = domainSchema.map(_.vertices)
+  override val vertices: F[Map[String, DomainSchemaVertex]] = domainSchema.map(_.vertices)
   override val schemaAttributesType: F[Map[String, String]] = domainSchema.map(_.attributesTypeMap)
   override val attributesTitle: F[Map[String, String]]      = domainSchema.map(_.attributesTitleMap)
-  override val headlineAttributes: F[Map[String, String]]   = domainSchema.map(_.headerAttributesMap)
-  override val from: F[Map[String, String]]                 = domainSchema.map(_.from)
-  override val select: F[Map[String, String]]               = domainSchema.map(_.select)
-  override val where: F[Map[String, String]]                = domainSchema.map(_.where)
-  override val join: F[Map[String, String]]                 = domainSchema.map(_.join)
-  override val groupBy: F[Map[String, String]]              = domainSchema.map(_.groupBy)
-  override val having: F[Map[String, String]]               = domainSchema.map(_.having)
-  override val orderBy: F[Map[String, String]]              = domainSchema.map(_.orderBy)
   override val sqlNames: F[Map[String, String]]             = domainSchema.map(_.sqlNames)
   override val edges: F[List[DomainSchemaEdge]]             = domainSchema.map(_.edges)
   override val thingKeys: F[Map[String, String]]            = domainSchema.map(_.thingKeys)

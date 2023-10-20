@@ -3,6 +3,7 @@ package text2ql.domainschema
 import io.circe.Codec
 import io.circe.generic.extras.Configuration
 import io.circe.generic.extras.semiauto.deriveConfiguredCodec
+import sttp.tapir.Schema
 
 final case class DomainSchemaDTO(
     vertices: List[DomainSchemaVertex],
@@ -41,10 +42,14 @@ final case class DomainSchemaEdge(
     toKey: String
 )
 
-object DomainSchemaDTO {
-  implicit val config: Configuration = Configuration.default.withSnakeCaseMemberNames
+object DomainSchemaVertex {
+  implicit val config: Configuration              = Configuration.default.withSnakeCaseMemberNames
+  implicit val codec: Codec[DomainSchemaVertex]   = deriveConfiguredCodec
+  implicit val schema: Schema[DomainSchemaVertex] = Schema.derived
+}
 
-  implicit val vertexCodec: Codec[DomainSchemaVertex]       = deriveConfiguredCodec
+object DomainSchemaDTO {
+  implicit val config: Configuration                        = Configuration.default.withSnakeCaseMemberNames
   implicit val attributeCodec: Codec[DomainSchemaAttribute] = deriveConfiguredCodec
   implicit val edgeCodec: Codec[DomainSchemaEdge]           = deriveConfiguredCodec
   implicit val codec: Codec[DomainSchemaDTO]                = deriveConfiguredCodec

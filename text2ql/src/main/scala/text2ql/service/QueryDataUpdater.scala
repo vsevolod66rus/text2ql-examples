@@ -4,6 +4,7 @@ import cats.effect.Async
 import cats.effect.kernel.Resource
 import cats.implicits._
 import text2ql.api._
+import text2ql.error.ServerError.ServerErrorWithMessage
 import text2ql.service.DomainSchemaService._
 
 trait QueryDataUpdater[F[_]] {
@@ -73,7 +74,7 @@ class QueryDataUpdaterImpl[F[+_]: Async](domainSchema: DomainSchemaService[F]) e
                            val isTargetRoleRole = e.isTarget
                            AttributeForDBQuery(
                              attributeName = slotName,
-                             attributeValues = attributeValues.some,
+                             attributeValues = attributeValues,
                              isTargetAttribute = isTargetRoleRole
                            )
                          }
@@ -101,7 +102,7 @@ class QueryDataUpdaterImpl[F[+_]: Async](domainSchema: DomainSchemaService[F]) e
           val comparisonOperator = getComparisonOperator(clarifiedEntities, attributeTypeEntity)
           AttributeForDBQuery(
             attributeName = name,
-            attributeValues = ownEntities.map(_.originalValue).toList.map(AttributeValue(_, comparisonOperator)).some,
+            attributeValues = ownEntities.map(_.originalValue).toList.map(AttributeValue(_, comparisonOperator)),
             isTargetAttribute = isTargetRoleRole
           )
         }
@@ -127,6 +128,8 @@ class QueryDataUpdaterImpl[F[+_]: Async](domainSchema: DomainSchemaService[F]) e
                                .exists(_.filterByTagAndValueOpt(E_TYPE, entity.originalName.some))
     currentEntityInDataOpt = currentDataForQuery.entityList.find(_.entityName == entityName)
     restEntities           = currentDataForQuery.entityList.filter(_.entityName != entityName)
+    entitySchemaOpt       <- domainSchema.vertices(currentDataForQuery.domain).map(_.get(entityName))
+    entitySchema          <- Async[F].fromOption(entitySchemaOpt, ServerErrorWithMessage("no schema for vertex"))
     res                   <- isTargetRole
                                .pure[F]
                                .ifM(
@@ -135,6 +138,7 @@ class QueryDataUpdaterImpl[F[+_]: Async](domainSchema: DomainSchemaService[F]) e
                                    newEntity         = currentEntityInDataOpt.fold(
                                                          EntityForDBQuery(
                                                            entityName = entityName,
+                                                           schema = entitySchema,
                                                            attributes = entityAttributes,
                                                            isTargetEntity = isTargetRole
                                                          )
@@ -157,6 +161,7 @@ class QueryDataUpdaterImpl[F[+_]: Async](domainSchema: DomainSchemaService[F]) e
                                          restEntities :+ currentEntityInDataOpt.fold(
                                            EntityForDBQuery(
                                              entityName = entityName,
+                                             schema = entitySchema,
                                              attributes = attrs
                                            )
                                          )(identity)
@@ -188,27 +193,30 @@ class QueryDataUpdaterImpl[F[+_]: Async](domainSchema: DomainSchemaService[F]) e
                               )
     entityName            = entityOrRelationName
     res                  <- for {
-                              res <- currentDataForQuery.pure[F].map { data =>
-                                       val entityAlreadyInDataOpt = data.entityList.find(_.entityName == entityName)
-                                       val updatedEntity          = entityAlreadyInDataOpt
-                                         .fold(
-                                           EntityForDBQuery(
-                                             entityName = entityName,
-                                             attributes = filterFromAttributeType +: restAttributes,
-                                             isTargetEntity = filterFromAttributeType.isTargetAttribute
-                                           )
-                                         ) { e =>
-                                           e.copy(
-                                             attributes = e.attributes.filterNot(
-                                               _.attributeName == filterFromAttributeType.attributeName
-                                             ) :+ filterFromAttributeType,
-                                             isTargetEntity = filterFromAttributeType.isTargetAttribute || e.isTargetEntity
-                                           )
-                                         }
-                                       data.copy(entityList = data.entityList.filterNot {
-                                         _.entityName == updatedEntity.entityName
-                                       } :+ updatedEntity)
-                                     }
+                              entitySchemaOpt <- domainSchema.vertices(domain).map(_.get(entityName))
+                              entitySchema    <- Async[F].fromOption(entitySchemaOpt, ServerErrorWithMessage("no schema for vertex"))
+                              res             <- currentDataForQuery.pure[F].map { data =>
+                                                   val entityAlreadyInDataOpt = data.entityList.find(_.entityName == entityName)
+                                                   val updatedEntity          = entityAlreadyInDataOpt
+                                                     .fold(
+                                                       EntityForDBQuery(
+                                                         entityName = entityName,
+                                                         schema = entitySchema,
+                                                         attributes = filterFromAttributeType +: restAttributes,
+                                                         isTargetEntity = filterFromAttributeType.isTargetAttribute
+                                                       )
+                                                     ) { e =>
+                                                       e.copy(
+                                                         attributes = e.attributes.filterNot(
+                                                           _.attributeName == filterFromAttributeType.attributeName
+                                                         ) :+ filterFromAttributeType,
+                                                         isTargetEntity = filterFromAttributeType.isTargetAttribute || e.isTargetEntity
+                                                       )
+                                                     }
+                                                   data.copy(entityList = data.entityList.filterNot {
+                                                     _.entityName == updatedEntity.entityName
+                                                   } :+ updatedEntity)
+                                                 }
                             } yield res
   } yield res
 

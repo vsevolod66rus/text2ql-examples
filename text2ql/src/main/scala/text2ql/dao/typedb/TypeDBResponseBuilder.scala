@@ -56,25 +56,24 @@ class TypeDBResponseBuilderImpl[F[_]: Sync](domainSchema: DomainSchemaService[F]
 
   override def collectAggregateClause(attributes: Seq[AttributeForDBQuery], domain: Domain): F[String] =
     attributes
-      .filter(_.attributeValues.exists(_.nonEmpty))
+      .filter(_.attributeValues.nonEmpty)
       .traverse { attribute =>
         for {
           attributeType <-
             domainSchema.schemaAttributesType(domain).map(_.getOrElse(attribute.attributeName, "string"))
-          joinValuesPart = if (attribute.attributeValues.exists(_.exists(_.joinValuesWithOr))) "or" else ";"
+          joinValuesPart = if (attribute.attributeValues.exists(_.joinValuesWithOr)) "or" else ";"
           clause         = attributeType match {
                              case "string" =>
                                val co = "="
-                               attribute.attributeValues.fold("")(
-                                 _.map(el => s"{$$${attribute.attributeName} $co '${el.value}';}")
-                                   .mkString("", s" $joinValuesPart ", ";")
-                               )
+                               attribute.attributeValues
+                                 .map(el => s"{$$${attribute.attributeName} $co '${el.value}';}")
+                                 .mkString("", s" $joinValuesPart ", ";")
                              case _        =>
-                               attribute.attributeValues.fold("") { v =>
-                                 v.map(a => if (attributeType == "boolean") a.copy(value = a.value.toLowerCase) else a)
-                                   .map(el => s"{$$${attribute.attributeName} ${el.comparisonOperator} ${el.value};}")
-                                   .mkString("", s" $joinValuesPart ", ";")
-                               }
+                               attribute.attributeValues
+                                 .map(a => if (attributeType == "boolean") a.copy(value = a.value.toLowerCase) else a)
+                                 .map(el => s"{$$${attribute.attributeName} ${el.comparisonOperator} ${el.value};}")
+                                 .mkString("", s" $joinValuesPart ", ";")
+
                            }
         } yield clause
       }

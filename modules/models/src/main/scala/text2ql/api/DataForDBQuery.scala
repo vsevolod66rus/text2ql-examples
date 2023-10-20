@@ -18,6 +18,7 @@ case class DataForDBQuery(
 
 case class EntityForDBQuery(
     entityName: String,
+    schema: DomainSchemaVertex,
     attributes: List[AttributeForDBQuery] = List.empty[AttributeForDBQuery],
     isTargetEntity: Boolean = false
 )
@@ -30,7 +31,7 @@ case class RelationForDBQuery(
 
 case class AttributeForDBQuery(
     attributeName: String,
-    attributeValues: Option[List[AttributeValue]] = None,
+    attributeValues: List[AttributeValue] = List.empty,
     isTargetAttribute: Boolean = false
 )
 
