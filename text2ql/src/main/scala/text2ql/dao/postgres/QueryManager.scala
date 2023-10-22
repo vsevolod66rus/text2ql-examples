@@ -15,6 +15,7 @@ import java.sql.{PreparedStatement, ResultSet}
 import scala.annotation.tailrec
 
 trait QueryManager[F[_]] {
+  // case class GeneralQueryDTO(headers: Vector[String], data: List[Vector[String]])
   def getGeneralQueryDTO(queryStr: String): F[GeneralQueryDTO]
   def getCount(buildQueryDTO: BuildQueryDTO, domain: Domain): F[CountQueryDTO]
   def getGenericPgRowStream(query: String, chunkSize: Int = 256): Stream[F, GenericPgRow]
@@ -55,7 +56,7 @@ class QueryManagerImpl[F[_]: Sync: Logger](
     readOne(cols).whileM[List](HRS.next)
 
   private def readOne(cols: Vector[Int]): ResultSetIO[Vector[String]] =
-    cols.traverse(i => FRS.getString(i))
+    cols.traverse(i => FRS.getString(i).map(s => if (s == null) "нет данных" else s))
 
   override def getGenericPgRowStream(query: String, chunkSize: Int = 256): Stream[F, GenericPgRow] =
     liftProcessGeneric(chunkSize, FC.prepareStatement(query), ().pure[PreparedStatementIO], FPS.executeQuery)
@@ -72,7 +73,7 @@ class QueryManagerImpl[F[_]: Sync: Logger](
       def getChunk(rs: ResultSet, ks: List[String]): Vector[GenericPgRow] = {
         @tailrec
         def iterate(num: Int, result: Vector[GenericPgRow]): Vector[GenericPgRow] = if (num <= chunkSize && rs.next) {
-          val row = ks.map(k => k -> Option(rs.getString(k)).getOrElse("Нет данных")).toMap
+          val row = ks.map(k => k -> Option(rs.getString(k)).getOrElse("нет данных")).toMap
           iterate(num + 1, result.appended(row))
         } else result
 

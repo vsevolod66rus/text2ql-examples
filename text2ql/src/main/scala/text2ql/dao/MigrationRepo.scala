@@ -3,6 +3,7 @@ package text2ql.dao
 import cats.effect.Async
 import cats.effect.kernel._
 import cats.implicits._
+import com.vaticle.typedb.client.api.TypeDBTransaction
 import com.vaticle.typeql.lang.TypeQL
 import com.vaticle.typeql.lang.query.TypeQLInsert
 import doobie._
@@ -11,7 +12,7 @@ import doobie.postgres.implicits._
 import doobie.Transactor
 import org.typelevel.log4cats.Logger
 import text2ql.migration._
-import fs2.Stream
+import fs2.{Chunk, Stream}
 import text2ql.api.Domain
 import text2ql.configs.DBDataConfig
 import text2ql.dao.typedb.TypeDBTransactionManager
@@ -151,32 +152,13 @@ class MigrationRepoImpl[F[_]: Async: Logger](
     .compile
     .drain
 
-  private def insertEmployeesTypeDB(maxConcurrent: Int = 8) =
+  private def insertEmployeesTypeDB(maxConcurrent: Int = 8): F[Unit] =
     getHrEmployeesStream
-      .take(
-        1000
-      ) // ограничим кол-во для демо - при больших количетвах (от 300 000) большие проблемы с производительностью TypeDB
       .chunkN(1000)
       .parEvalMap(maxConcurrent) { chunk =>
         transactionManager.write(Domain.HR).use { transaction =>
           for {
-            _ <- Async[F]
-                   .delay {
-                     chunk
-                       .map { e =>
-                         val insertQueryStr =
-                           s"""insert $$employee isa employee, has id "${e.id}", has job_id "${e.jobId}",
-                              |has department_id "${e.departmentId}", has gender ${e.gender}, has name "${e.name}", has email "${e.email}",
-                              |has hired_date ${LocalDate
-                             .ofInstant(e.hiredDate, ZoneId.systemDefault())
-                             .toString}, has fired ${e.fired},
-                              |has fired_date ${LocalDate
-                             .ofInstant(e.firedDate.getOrElse(Instant.ofEpochMilli(0L)), ZoneId.systemDefault())},
-                              |has path "${e.path}";""".stripMargin
-                         val insertQuery    = TypeQL.parseQuery[TypeQLInsert](insertQueryStr)
-                         transaction.query().insert(insertQuery)
-                       }
-                   }
+            _ <- insertEmployeesChunk(chunk, transaction)
             _  = transaction.commit()
             _  = transaction.close()
             _ <- Logger[F].info(s"inserted ${chunk.size} employees")
@@ -185,6 +167,21 @@ class MigrationRepoImpl[F[_]: Async: Logger](
       }
       .compile
       .drain
+
+  private def insertEmployeesChunk(chunk: Chunk[Employee], transaction: TypeDBTransaction): F[Unit] =
+    Async[F].blocking {
+      chunk.map { e =>
+        val hiredDate      = LocalDate.ofInstant(e.hiredDate, ZoneId.of("UTC"))
+        val firedDate      = e.firedDate.fold(LocalDate.MIN)(LocalDate.ofInstant(_, ZoneId.of("UTC")))
+        val insertQueryStr =
+          s"""insert $$employee isa employee, has id "${e.id}", has job_id "${e.jobId}",
+             |has department_id "${e.departmentId}", has gender ${e.gender}, has name "${e.name}", 
+             |has email "${e.email}", has hired_date $hiredDate, has fired ${e.fired}, 
+             |has fired_date $firedDate, has path "${e.path}";""".stripMargin
+        val insertQuery    = TypeQL.parseQuery[TypeQLInsert](insertQueryStr)
+        transaction.query().insert(insertQuery)
+      }
+    }.void
 
   private def insertJobsTypeDB() = getHrJobsStream
     .chunkN(1000)

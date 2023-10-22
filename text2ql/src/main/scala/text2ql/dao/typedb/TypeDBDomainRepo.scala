@@ -7,7 +7,7 @@ import fs2.Stream
 import org.typelevel.log4cats.Logger
 import retry.RetryDetails._
 import retry._
-import text2ql.api.{AggregationLogic, AskRepoResponse, DataForDBQuery, Domain, GridPropertyFilterValue}
+import text2ql.api.{AggregationLogic, AskRepoResponse, DataForDBQuery, Domain, GridPropertyValue}
 import text2ql.configs.TypeDBConfig
 import text2ql.error.ServerError.{TypeDBConnectionsLimitExceeded, TypeDBQueryException}
 
@@ -17,18 +17,11 @@ trait TypeDBDomainRepo[F[_]] {
 
   def generalTypeDBQueryWithPermitAndRetry(queryData: DataForDBQuery): F[AskRepoResponse]
 
-  def getAttributeValuesWithPermitAndRetry(
-      queryData: DataForDBQuery,
-      logic: AggregationLogic,
-      attrName: String,
-      domain: Domain
-  ): F[List[GridPropertyFilterValue]]
-
   def typeDbStreamQuery(
       queryData: DataForDBQuery,
       logic: AggregationLogic,
       domain: Domain
-  ): F[Stream[F, Map[String, GridPropertyFilterValue]]]
+  ): F[Stream[F, Map[String, GridPropertyValue]]]
 }
 
 object TypeDBDomainRepo {
@@ -55,25 +48,7 @@ class TypeDBDomainRepoImpl[F[+_]: Async: Logger](
     semaphore.tryAcquire.ifM(
       semaphore.count.flatMap(c => Logger[F].info(s"typeDB semaphore count = $c, query = general")) >>
         Async[F].guarantee(
-          queryManager
-            .generalQuery(queryData, queryData.logic, queryData.domain),
-//            .adaptError(TypeDBQueryException(_)),
-          semaphore.release
-        ),
-      Async[F].raiseError(TypeDBConnectionsLimitExceeded)
-    )
-  )
-
-  def getAttributeValuesWithPermitAndRetry(
-      queryData: DataForDBQuery,
-      logic: AggregationLogic,
-      attrName: String,
-      domain: Domain
-  ): F[List[GridPropertyFilterValue]] = retryOnSomeErrors(
-    semaphore.tryAcquire.ifM(
-      semaphore.count.flatMap(c => Logger[F].info(s"typeDB semaphore count = $c, query = general")) >>
-        Async[F].guarantee(
-          queryManager.getAttributeValues(queryData, logic, attrName, domain),
+          queryManager.generalQuery(queryData),
           semaphore.release
         ),
       Async[F].raiseError(TypeDBConnectionsLimitExceeded)
@@ -84,7 +59,7 @@ class TypeDBDomainRepoImpl[F[+_]: Async: Logger](
       queryData: DataForDBQuery,
       logic: AggregationLogic,
       domain: Domain
-  ): F[Stream[F, Map[String, GridPropertyFilterValue]]] = Async[F].delay {
+  ): F[Stream[F, Map[String, GridPropertyValue]]] = Async[F].delay {
     for {
       readTransaction <- Stream.resource(transactionManager.read(domain))
       answer          <- Stream

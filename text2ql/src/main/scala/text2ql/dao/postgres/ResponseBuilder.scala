@@ -18,13 +18,13 @@ trait ResponseBuilder[F[_]] {
 
   def toItem(headers: Vector[String], properties: List[GridPropertyItemModel], domain: Domain)(
       row: Vector[String]
-  ): F[Map[String, GridPropertyFilterValue]]
+  ): F[Map[String, GridPropertyValue]]
 
   def getAttributeValue(
       headers: Vector[String],
       attribute: String,
       domain: Domain
-  )(row: Vector[String]): F[GridPropertyFilterValue]
+  )(row: Vector[String]): F[GridPropertyValue]
 }
 
 object ResponseBuilder {
@@ -57,20 +57,20 @@ class ResponseBuilderImpl[F[_]: Async](
 
   override def toItem(headers: Vector[String], properties: List[GridPropertyItemModel], domain: Domain)(
       row: Vector[String]
-  ): F[Map[String, GridPropertyFilterValue]] =
+  ): F[Map[String, GridPropertyValue]]         =
     properties
       .traverse(prop => getAttributeValue(headers, prop.key, domain)(row).map(v => prop.key -> v))
       .map(_.groupMapReduce(_._1)(_._2)((_, v) => v))
-      .map(m => Map("id" -> GridPropertyFilterValueString(java.util.UUID.randomUUID().toString)) ++ m)
+      .map(m => Map("id" -> GridPropertyValueString(java.util.UUID.randomUUID().toString)) ++ m)
 
   override def getAttributeValue(
       headers: Vector[String],
       attribute: String,
       domain: Domain
-  )(row: Vector[String]): F[GridPropertyFilterValue] = domainSchema.schemaAttributesType(domain).map { attrs =>
+  )(row: Vector[String]): F[GridPropertyValue] = domainSchema.schemaAttributesType(domain).map { attrs =>
     val stringValue = row(headers.indexOf(attribute))
     val attrType    = if (attribute == "counting") "long" else attrs.getOrElse(attribute, "string")
-    GridPropertyFilterValue.fromValueAndType(stringValue, attrType)
+    GridPropertyValue.fromValueAndType(stringValue, attrType)
   }
 
   private def toAskResponse(
@@ -98,8 +98,7 @@ class ResponseBuilderImpl[F[_]: Async](
       } yield GridPropertyItemModel(
         key = attribute,
         title = title,
-        dataType = GridPropertyDataType.fromType(attrType),
-        filter = GridPropertyFilterModel.fromAttrType(attrType, isCategorical = true)
+        dataType = GridPropertyDataType.fromType(attrType)
       )
     }
 
@@ -117,14 +116,12 @@ class ResponseBuilderImpl[F[_]: Async](
     GridPropertyItemModel(
       key = "aggregation",
       title = aggregationTitle,
-      dataType = GridPropertyDataTypeString(),
-      filter = None
+      dataType = GridPropertyDataTypeString()
     ),
     GridPropertyItemModel(
       key = "counting",
       title = s"""Количество экземпяров "$countingTitle"""",
-      dataType = GridPropertyDataTypeNumber(),
-      filter = None
+      dataType = GridPropertyDataTypeNumber()
     )
   )
 
@@ -136,39 +133,10 @@ class ResponseBuilderImpl[F[_]: Async](
     for {
       properties <- makeGridProperties(queryData)
       items      <- generalQueryDTO.data.traverse(toItem(generalQueryDTO.headers, properties, queryData.domain))
-      result     <- if (queryData.logic.unique)
-                      Async[F].delay(makeGridTable(properties, items, total))
-                    else makeGridChart(properties, items, queryData.logic, total, queryData.domain)
-    } yield result
-
-  private def makeGridTable(
-      properties: List[GridPropertyItemModel],
-      items: List[Map[String, GridPropertyFilterValue]],
-      total: Long
-  ): GridWithDataRenderTypeResponseModel =
-    GridWithDataRenderTypeResponseModel(
-      renderType = IDataRenderTypeTable(),
+    } yield GridWithDataRenderTypeResponseModel(
       properties = properties,
       items = items,
       total = total
     )
-
-  private def makeGridChart(
-      properties: List[GridPropertyItemModel],
-      items: List[Map[String, GridPropertyFilterValue]],
-      logic: AggregationLogic,
-      total: Long,
-      domain: Domain
-  ): F[GridWithDataRenderTypeResponseModel] = for {
-    aggregationName  <- logic.groupByAttr.pure[F]
-    aggregationTitle <- domainSchema.attributesTitle(domain).map(_.getOrElse(aggregationName, aggregationName))
-    aggregationBy     = aggregationTitle
-  } yield GridWithDataRenderTypeResponseModel(
-    renderType = IDataRenderTypeChart(),
-    properties = properties,
-    items = items,
-    title = s"Агрегация по $aggregationBy".some,
-    total = total
-  )
 
 }

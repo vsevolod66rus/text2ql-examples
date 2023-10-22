@@ -5,10 +5,6 @@ import cats.implicits._
 import com.vaticle.typedb.client.api.answer.ConceptMap
 import text2ql.api._
 import text2ql.service.DomainSchemaService
-import text2ql.service.DomainSchemaService._
-
-import java.time.LocalDateTime
-import scala.util.Try
 
 trait TypeDBResponseBuilder[F[_]] {
 
@@ -36,7 +32,7 @@ trait TypeDBResponseBuilder[F[_]] {
       cm: ConceptMap,
       attribute: String,
       domain: Domain
-  ): F[GridPropertyFilterValue]
+  ): F[GridPropertyValue]
 
   def getCMAttributeStringValue(
       cm: ConceptMap,
@@ -94,8 +90,7 @@ class TypeDBResponseBuilderImpl[F[_]: Sync](domainSchema: DomainSchemaService[F]
         } yield GridPropertyItemModel(
           key = attribute,
           title = title,
-          dataType = GridPropertyDataType.fromType(attrType),
-          filter = GridPropertyFilterModel.fromAttrType(attrType, isCategorical = true)
+          dataType = GridPropertyDataType.fromType(attrType)
         )
       }
       .map(_ -> List.empty)
@@ -117,20 +112,12 @@ class TypeDBResponseBuilderImpl[F[_]: Sync](domainSchema: DomainSchemaService[F]
                                    GridPropertyItemModel(
                                      key = headlineAttribute,
                                      title = aggregationTitle,
-                                     dataType = GridPropertyDataTypeString(),
-                                     filter = GridPropertyFilterModel(
-                                       `type` = GridPropertyFilterTypeString(),
-                                       values = extractedData
-                                         .distinctBy(_.aggregationValue)
-                                         .map(extractedItem => GridPropertyFilterValueString(extractedItem.headlineValue))
-                                         .some
-                                     ).some
+                                     dataType = GridPropertyDataTypeString()
                                    ),
                                    GridPropertyItemModel(
                                      key = "количество",
                                      title = s"""Количество экземпяров "$countingTitle"""",
-                                     dataType = GridPropertyDataTypeNumber(),
-                                     filter = None
+                                     dataType = GridPropertyDataTypeNumber()
                                    )
                                  ) -> extractedData
     } yield result
@@ -154,12 +141,11 @@ class TypeDBResponseBuilderImpl[F[_]: Sync](domainSchema: DomainSchemaService[F]
                                  .traverse(prop => getCMAttributeValue(cm, prop.key, domain).map(a => prop.key -> a))
                                  .map(_.groupMapReduce(_._1)(_._2)((_, v) => v))
                                  .map { m =>
-                                   Map("id" -> GridPropertyFilterValueString(java.util.UUID.randomUUID().toString)) ++ m
+                                   Map("id" -> GridPropertyValueString(java.util.UUID.randomUUID().toString)) ++ m
                                  }
 
                              }
                 } yield GridWithDataRenderTypeResponseModel(
-                  renderType = IDataRenderTypeTable(),
                   properties = properties,
                   items = items,
                   total = total
@@ -168,8 +154,6 @@ class TypeDBResponseBuilderImpl[F[_]: Sync](domainSchema: DomainSchemaService[F]
                 for {
                   aggregationName <- logic.groupByAttr.replaceAll("_iid", "").pure[F]
                   attrs           <- domainSchema.attributesTitle(domain)
-                  aggregationTitle = attrs.getOrElse(aggregationName, aggregationName)
-                  aggregationBy    = aggregationTitle
                   groupItems       =
                     extractedData
                       .groupBy(_.aggregationValue)
@@ -178,19 +162,17 @@ class TypeDBResponseBuilderImpl[F[_]: Sync](domainSchema: DomainSchemaService[F]
                   items            = groupItems
                                        .slice(offset, offset + limit)
                                        .map { case (key, value) =>
-                                         Map("id" -> GridPropertyFilterValueString(java.util.UUID.randomUUID().toString)) ++
+                                         Map("id" -> GridPropertyValueString(java.util.UUID.randomUUID().toString)) ++
                                            properties.groupMapReduce(_.key) {
                                              case prop if prop.key == "количество" =>
-                                               GridPropertyFilterValueNumber(value.size.toDouble)
+                                               GridPropertyValueNumber(value.size.toDouble)
                                              case _                                =>
-                                               GridPropertyFilterValueString(value.headOption.map(_.headlineValue).getOrElse(key))
+                                               GridPropertyValueString(value.headOption.map(_.headlineValue).getOrElse(key))
                                            }((_, v) => v)
                                        }
                 } yield GridWithDataRenderTypeResponseModel(
-                  renderType = IDataRenderTypeChart(),
                   properties = properties,
                   items = items,
-                  title = s"Агрегация по $aggregationBy".some,
                   total = groupItems.size.toLong
                 ).some
   } yield result
@@ -199,10 +181,10 @@ class TypeDBResponseBuilderImpl[F[_]: Sync](domainSchema: DomainSchemaService[F]
       cm: ConceptMap,
       attribute: String,
       domain: Domain
-  ): F[GridPropertyFilterValue] =
+  ): F[GridPropertyValue] =
     domainSchema.schemaAttributesType(domain).map(_.getOrElse(attribute, "string")).map { attrType =>
       val stringValue = getCMAttributeStringValue(cm, attribute)
-      GridPropertyFilterValue.fromValueAndType(stringValue, attrType)
+      GridPropertyValue.fromValueAndType(stringValue, attrType)
     }
 
   override def getCMAttributeStringValue(

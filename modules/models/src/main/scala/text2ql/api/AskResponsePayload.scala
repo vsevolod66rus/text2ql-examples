@@ -1,13 +1,13 @@
 package text2ql.api
 
-import cats.implicits.catsSyntaxOptionId
 import io.circe.generic.semiauto.deriveCodec
 import io.circe.syntax._
 import io.circe.{Codec, Decoder, Encoder}
 import sttp.tapir.Schema
 
 import java.sql.Timestamp
-import java.time.LocalDateTime
+import java.time.format.DateTimeFormatter
+import java.time.{Instant, LocalDateTime, ZoneId}
 import scala.util.Try
 
 case class AskResponsePayload(
@@ -19,52 +19,27 @@ sealed trait GridPropertyDataType
 
 case class GridPropertyDataTypeString(dataType: String = "string")   extends GridPropertyDataType
 case class GridPropertyDataTypeNumber(dataType: String = "number")   extends GridPropertyDataType
-case class GridPropertyDataTypeLookup(dataType: String = "lookup")   extends GridPropertyDataType
+case class GridPropertyDataTypeObject(dataType: String = "object")   extends GridPropertyDataType
 case class GridPropertyDataTypeDate(dataType: String = "date")       extends GridPropertyDataType
 case class GridPropertyDataTypeBoolean(dataType: String = "boolean") extends GridPropertyDataType
 
-sealed trait GridPropertyFilterType
+sealed trait GridPropertyValue
 
-case class GridPropertyFilterTypeBoolean(filterType: String = "booleanSelect")         extends GridPropertyFilterType
-case class GridPropertyFilterTypeLookupSelect(filterType: String = "lookupSelect")     extends GridPropertyFilterType
-case class GridPropertyFilterTypeString(filterType: String = "string")                 extends GridPropertyFilterType
-case class GridPropertyFilterTypeStringSelect(filterType: String = "stringSelect")     extends GridPropertyFilterType
-case class GridPropertyFilterTypeDateInterval(filterType: String = "dateInterval")     extends GridPropertyFilterType
-case class GridPropertyFilterTypeNumberInterval(filterType: String = "numberInterval") extends GridPropertyFilterType
-
-sealed trait IDataRenderType
-
-case class IDataRenderTypeTable(renderType: String = "table") extends IDataRenderType
-case class IDataRenderTypeChart(renderType: String = "chart") extends IDataRenderType
-
-sealed trait GridPropertyFilterValue
-
-case class GridPropertyFilterValueString(value: String)           extends GridPropertyFilterValue
-case class GridPropertyFilterValueNumber(value: Double)           extends GridPropertyFilterValue
-case class GridPropertyFilterValueBoolean(value: Boolean)         extends GridPropertyFilterValue
-case class GridPropertyFilterValueDate(value: LocalDateTime)      extends GridPropertyFilterValue
-case class GridPropertyFilterValueLookupModel(value: LookupModel) extends GridPropertyFilterValue
-case class GridPropertyFilterValueNull()                          extends GridPropertyFilterValue
-case class LookupModel(id: String, title: String)
+case class GridPropertyValueString(value: String)   extends GridPropertyValue
+case class GridPropertyValueNumber(value: Double)   extends GridPropertyValue
+case class GridPropertyValueBoolean(value: Boolean) extends GridPropertyValue
+case class GridPropertyValueInstant(value: Instant) extends GridPropertyValue
 
 case class GridWithDataRenderTypeResponseModel(
-    renderType: IDataRenderType = IDataRenderTypeTable(),
-    properties: List[GridPropertyItemModel] = List.empty[GridPropertyItemModel],
-    items: List[Map[String, GridPropertyFilterValue]] = List.empty[Map[String, GridPropertyFilterValue]],
-    title: Option[String] = None,
+    properties: List[GridPropertyItemModel] = List.empty,
+    items: List[Map[String, GridPropertyValue]] = List.empty,
     total: Long = 0L
 )
 
 case class GridPropertyItemModel(
     key: String,
     title: String,
-    dataType: GridPropertyDataType,
-    filter: Option[GridPropertyFilterModel] = None
-)
-
-case class GridPropertyFilterModel(
-    `type`: GridPropertyFilterType,
-    values: Option[List[GridPropertyFilterValue]] = None
+    dataType: GridPropertyDataType
 )
 
 case class AskRepoResponse(
@@ -79,7 +54,7 @@ object GridPropertyDataType {
   implicit val encodeGridPropertyDataType: Encoder[GridPropertyDataType] = Encoder.instance {
     case _ @GridPropertyDataTypeString(dataType)  => dataType.asJson
     case _ @GridPropertyDataTypeNumber(dataType)  => dataType.asJson
-    case _ @GridPropertyDataTypeLookup(dataType)  => dataType.asJson
+    case _ @GridPropertyDataTypeObject(dataType)  => dataType.asJson
     case _ @GridPropertyDataTypeDate(dataType)    => dataType.asJson
     case _ @GridPropertyDataTypeBoolean(dataType) => dataType.asJson
   }
@@ -87,7 +62,7 @@ object GridPropertyDataType {
   implicit val decodeGridPropertyDataType: Decoder[GridPropertyDataType] =
     Decoder[String].map {
       case "number"  => GridPropertyDataTypeNumber()
-      case "lookup"  => GridPropertyDataTypeLookup()
+      case "object"  => GridPropertyDataTypeObject()
       case "date"    => GridPropertyDataTypeDate()
       case "boolean" => GridPropertyDataTypeBoolean()
       case _         => GridPropertyDataTypeString()
@@ -103,95 +78,36 @@ object GridPropertyDataType {
   }
 }
 
-object GridPropertyFilterType {
-
-  implicit val encodeGridPropertyFilterType: Encoder[GridPropertyFilterType] = Encoder.instance {
-    case _ @GridPropertyFilterTypeBoolean(filterType)        => filterType.asJson
-    case _ @GridPropertyFilterTypeLookupSelect(filterType)   => filterType.asJson
-    case _ @GridPropertyFilterTypeStringSelect(filterType)   => filterType.asJson
-    case _ @GridPropertyFilterTypeString(filterType)         => filterType.asJson
-    case _ @GridPropertyFilterTypeDateInterval(filterType)   => filterType.asJson
-    case _ @GridPropertyFilterTypeNumberInterval(filterType) => filterType.asJson
-  }
-
-  implicit val decodeGridPropertyFilterType: Decoder[GridPropertyFilterType] =
-    Decoder[String].map {
-      case "dateInterval"   => GridPropertyFilterTypeDateInterval()
-      case "numberInterval" => GridPropertyFilterTypeNumberInterval()
-      case "booleanSelect"  => GridPropertyFilterTypeBoolean()
-      case "lookupSelect"   => GridPropertyFilterTypeLookupSelect()
-      case "stringSelect"   => GridPropertyFilterTypeStringSelect()
-      case _                => GridPropertyFilterTypeString()
-    }
-
-  implicit val schema: Schema[GridPropertyFilterType] = Schema.derived
-}
-
-object IDataRenderType {
-
-  implicit val encodeGridPropertyRenderType: Encoder[IDataRenderType] = Encoder.instance {
-    case _ @IDataRenderTypeTable(renderType) => renderType.asJson
-    case _ @IDataRenderTypeChart(renderType) => renderType.asJson
-  }
-
-  implicit val decodeGridPropertyFilterType: Decoder[IDataRenderType] =
-    Decoder[String].map {
-      case "chart" => IDataRenderTypeChart()
-      case _       => IDataRenderTypeTable()
-    }
-
-  implicit val schema: Schema[IDataRenderType] = Schema.derived
-}
-
-object GridPropertyFilterValue extends TimestampCodec {
+object GridPropertyValue extends TimestampCodec {
 
   val nullValueDescription: String = "нет данных"
 
-  implicit val encodeGridPropertyFilterValue: Encoder[GridPropertyFilterValue] = Encoder.instance {
-    case _ @GridPropertyFilterValueNull()                    => nullValueDescription.asJson
-    case _ @GridPropertyFilterValueString(renderType)        => renderType.asJson
-    case _ @GridPropertyFilterValueNumber(renderType)        => renderType.asJson
-    case _ @GridPropertyFilterValueBoolean(renderType)       => renderType.asJson
-    case _ @GridPropertyFilterValueDate(renderType)          => Timestamp.valueOf(renderType).asJson
-    case lookupModel @ GridPropertyFilterValueLookupModel(_) => lookupModel.asJson
+  implicit val encodeGridPropertyFilterValue: Encoder[GridPropertyValue] = Encoder.instance {
+    case _ @GridPropertyValueString(string)   => string.asJson
+    case _ @GridPropertyValueNumber(number)   => number.asJson
+    case _ @GridPropertyValueBoolean(boolean) => boolean.asJson
+    case _ @GridPropertyValueInstant(instant) => instant.asJson
   }
 
-  implicit val decodeGridPropertyFilterValue: Decoder[GridPropertyFilterValue] =
-    Decoder[String]
-      .map[GridPropertyFilterValue](GridPropertyFilterValueString)
-      .or(Decoder[Double].map[GridPropertyFilterValue](GridPropertyFilterValueNumber))
-      .or(Decoder[Boolean].map[GridPropertyFilterValue](GridPropertyFilterValueBoolean))
-      .or(Decoder[LocalDateTime].map[GridPropertyFilterValue](GridPropertyFilterValueDate))
-      .or(Decoder.forProduct1("value")(GridPropertyFilterValueLookupModel.apply))
+  implicit val decodeGridPropertyFilterValue: Decoder[GridPropertyValue] =
+    Decoder[Instant]
+      .map[GridPropertyValue](GridPropertyValueInstant)
+      .or(Decoder[Boolean].map[GridPropertyValue](GridPropertyValueBoolean))
+      .or(Decoder[Double].map[GridPropertyValue](GridPropertyValueNumber))
+      .or(Decoder[String].map[GridPropertyValue](GridPropertyValueString))
 
-  implicit val schema: Schema[GridPropertyFilterValue] = Schema.derived
+  implicit val schema: Schema[GridPropertyValue] = Schema.derived
 
-  def fromValueAndType(value: String, attrType: String): GridPropertyFilterValue = attrType match {
-    case _ if value == null => GridPropertyFilterValueNull()
-    case "double" | "long"  =>
-      value.toDoubleOption
-        .fold[GridPropertyFilterValue](GridPropertyFilterValueString(value))(GridPropertyFilterValueNumber)
-    case "boolean"          =>
-      val fixedValue = value match {
-        case "t" => "True"
-        case "f" => "False"
-        case _   => value
-      }
-      fixedValue.toBooleanOption
-        .fold[GridPropertyFilterValue](GridPropertyFilterValueString(fixedValue))(GridPropertyFilterValueBoolean)
-    case "datetime"         =>
-      Try(LocalDateTime.parse(value)).toOption
-        .fold[GridPropertyFilterValue](GridPropertyFilterValueString(value))(d => GridPropertyFilterValueDate(d))
-    case _                  => GridPropertyFilterValueString(value)
-  }
-
-  def getStringValue(fv: GridPropertyFilterValue): String = fv match {
-    case GridPropertyFilterValueNull()             => nullValueDescription
-    case GridPropertyFilterValueString(value)      => value
-    case GridPropertyFilterValueNumber(value)      => value.toString
-    case GridPropertyFilterValueBoolean(value)     => value.toString
-    case GridPropertyFilterValueDate(value)        => value.toString
-    case GridPropertyFilterValueLookupModel(value) => value.title
+  def fromValueAndType(value: String, attrType: String): GridPropertyValue = attrType match {
+    case "double" | "long" =>
+      value.toDoubleOption.fold[GridPropertyValue](GridPropertyValueString(value))(GridPropertyValueNumber)
+    case "boolean"         =>
+      { value match { case "t" => "True"; case "f" => "False"; case _ => value } }.toBooleanOption
+        .fold[GridPropertyValue](GridPropertyValueString(value))(GridPropertyValueBoolean)
+    case "datetime"        =>
+      Try(Timestamp.valueOf(value).toInstant).toOption
+        .fold[GridPropertyValue](GridPropertyValueString(value))(GridPropertyValueInstant)
+    case _                 => GridPropertyValueString(value)
   }
 
 }
@@ -206,31 +122,7 @@ object GridPropertyItemModel {
   implicit val schema: Schema[GridPropertyItemModel] = Schema.derived
 }
 
-object GridPropertyFilterModel {
-  implicit val codec: Codec[GridPropertyFilterModel]   = deriveCodec
-  implicit val schema: Schema[GridPropertyFilterModel] = Schema.derived
-
-  def fromAttrType(attrType: String, isCategorical: Boolean): Option[GridPropertyFilterModel] = attrType match {
-    case "double" | "long"         => GridPropertyFilterModel(GridPropertyFilterTypeNumberInterval()).some
-    case "boolean"                 => GridPropertyFilterModel(GridPropertyFilterTypeBoolean()).some
-    case "string" if isCategorical => GridPropertyFilterModel(GridPropertyFilterTypeStringSelect()).some
-    case "string"                  => GridPropertyFilterModel(GridPropertyFilterTypeString()).some
-    case "datetime"                => GridPropertyFilterModel(GridPropertyFilterTypeDateInterval()).some
-    case _                         => None
-  }
-}
-
-object GridPropertyFilterValueLookupModel {
-  implicit val codec: Codec[GridPropertyFilterValueLookupModel]   = deriveCodec
-  implicit val schema: Schema[GridPropertyFilterValueLookupModel] = Schema.derived
-}
-
-object LookupModel {
-  implicit val codec: Codec[LookupModel]   = deriveCodec
-  implicit val schema: Schema[LookupModel] = Schema.derived
-}
-
-object AskResponsePayload {
+object AskResponsePayload    {
   implicit val codec: Codec[AskResponsePayload]   = deriveCodec
   implicit val schema: Schema[AskResponsePayload] = Schema.derived
 }

@@ -3,6 +3,7 @@ package text2ql.dao.typedb
 import cats.effect.kernel._
 import cats.implicits._
 import com.vaticle.typedb.client.api.TypeDBTransaction
+import com.vaticle.typedb.client.api.answer.ConceptMap
 import com.vaticle.typeql.lang.TypeQL
 import com.vaticle.typeql.lang.query.TypeQLMatch
 import fs2.Stream
@@ -16,21 +17,14 @@ import scala.util.Try
 
 trait TypeDBQueryManager[F[_]] {
 
-  def generalQuery(queryData: DataForDBQuery, logic: AggregationLogic, domain: Domain): F[AskRepoResponse]
+  def generalQuery(queryData: DataForDBQuery): F[AskRepoResponse]
 
   def streamQuery(
       queryData: DataForDBQuery,
       logic: AggregationLogic,
       readTransaction: TypeDBTransaction,
       domain: Domain
-  ): F[Stream[F, Map[String, GridPropertyFilterValue]]]
-
-  def getAttributeValues(
-      queryData: DataForDBQuery,
-      logic: AggregationLogic,
-      attrName: String,
-      domain: Domain
-  ): F[List[GridPropertyFilterValue]]
+  ): F[Stream[F, Map[String, GridPropertyValue]]]
 }
 
 object TypeDBQueryManager {
@@ -59,7 +53,7 @@ final class TypeDBQueryManagerImpl[F[_]: Sync: Logger](
       logic: AggregationLogic,
       readTransaction: TypeDBTransaction,
       domain: Domain
-  ): F[Stream[F, Map[String, GridPropertyFilterValue]]] = for {
+  ): F[Stream[F, Map[String, GridPropertyValue]]] = for {
     query   <- queryBuilder.build(queryData, logic, unlimitedQuery = true, conf.limit, domain)
     getQuery = TypeQL.parseQuery[TypeQLMatch](query)
     _       <- Logger[F].info(s"try typeDB stream Query: $query")
@@ -72,9 +66,9 @@ final class TypeDBQueryManagerImpl[F[_]: Sync: Logger](
     res = if (logic.unique)
             // left the chunkSize as 1 to be closer to the previous version implementation
             Stream.fromIterator(iterator = iterator.asScala, chunkSize = 1).map { cm =>
-              Map("id" -> GridPropertyFilterValueString(java.util.UUID.randomUUID().toString)) ++
+              Map("id" -> GridPropertyValueString(java.util.UUID.randomUUID().toString)) ++
                 properties.groupMapReduce(_.key) { prop =>
-                  GridPropertyFilterValueString(queryHelper.getCMAttributeStringValue(cm, prop.key))
+                  GridPropertyValueString(queryHelper.getCMAttributeStringValue(cm, prop.key))
                 }((_, value) => value)
             }
           else {
@@ -84,34 +78,28 @@ final class TypeDBQueryManagerImpl[F[_]: Sync: Logger](
               .sortWith((el1, el2) => el1._2.size > el2._2.size)
 
             val items = groupItems.map { case (key, value) =>
-              Map("id" -> GridPropertyFilterValueString(java.util.UUID.randomUUID().toString)) ++
+              Map("id" -> GridPropertyValueString(java.util.UUID.randomUUID().toString)) ++
                 properties.groupMapReduce(_.key) {
-                  case prop if prop.key == "количество" => GridPropertyFilterValueNumber(value.size.toDouble)
-                  case _                                => GridPropertyFilterValueString(value.headOption.map(_.headlineValue).getOrElse(key))
+                  case prop if prop.key == "количество" => GridPropertyValueNumber(value.size.toDouble)
+                  case _                                => GridPropertyValueString(value.headOption.map(_.headlineValue).getOrElse(key))
                 }((_, value) => value)
             }
 
-            Stream.emits[F, Map[String, GridPropertyFilterValue]](items)
+            Stream.emits[F, Map[String, GridPropertyValue]](items)
           }
   } yield res
 
-  override def generalQuery(
-      queryData: DataForDBQuery,
-      logic: AggregationLogic,
-      domain: Domain
-  ): F[AskRepoResponse] = transactionManager
-    .read(domain)
+  override def generalQuery(queryData: DataForDBQuery): F[AskRepoResponse] = transactionManager
+    .read(queryData.domain)
     .use { readTransaction =>
+      val logic  = queryData.logic
+      val domain = queryData.domain
       val countF = getCount(queryData, logic, readTransaction, domain)
       for {
         count <- countF
         query <- queryBuilder.build(queryData, logic, unlimitedQuery = false, conf.limit, domain)
-        _     <- Logger[F].info(s"Try typeDB query: $query")
 
-        getQuery        = TypeQL.parseQuery[TypeQLMatch](query)
-        queryResultOpt <-
-          Sync[F].delay(Try(readTransaction.query().`match`(getQuery).iterator().asScala.toSeq).toOption)
-        queryResult    <- Sync[F].fromOption(queryResultOpt, ServerErrorWithMessage("no result: query error"))
+        queryResult <- typeQLMatchQuery(readTransaction, query).map(_.iterator().asScala.toSeq)
 
         page    = queryData.pagination.flatMap(_.page).getOrElse(0)
         perPage = queryData.pagination.flatMap(_.perPage).getOrElse(conf.limit)
@@ -138,33 +126,6 @@ final class TypeDBQueryManagerImpl[F[_]: Sync: Logger](
                   else AskRepoResponse(text = "По Вашему запросу данных не найдено.".some, count = count).pure[F]
       } yield result
     }
-
-  override def getAttributeValues(
-      queryData: DataForDBQuery,
-      logic: AggregationLogic,
-      attrName: String,
-      domain: Domain
-  ): F[List[GridPropertyFilterValue]] = transactionManager
-    .read(domain)
-    .use(getAttributeValuesQuery(queryData, logic, _, attrName, domain))
-
-  private def getAttributeValuesQuery(
-      queryData: DataForDBQuery,
-      logic: AggregationLogic,
-      readTransaction: TypeDBTransaction,
-      attrName: String,
-      domain: Domain
-  ): F[List[GridPropertyFilterValue]] = for {
-    query    <- queryBuilder.build(queryData, logic, unlimitedQuery = false, 100, domain)
-    getQuery <- TypeQL.parseQuery[TypeQLMatch](query).pure[F]
-    result   <- readTransaction
-                  .query()
-                  .`match`(getQuery)
-                  .iterator()
-                  .asScala
-                  .toList
-                  .traverse(queryHelper.getCMAttributeValue(_, attrName, domain))
-  } yield result
 
   private def getCount(
       queryData: DataForDBQuery,
@@ -231,5 +192,13 @@ final class TypeDBQueryManagerImpl[F[_]: Sync: Logger](
                      numberOfUses = 0
                    )
   } yield countDTO
+
+  private def typeQLMatchQuery(
+      readTransaction: TypeDBTransaction,
+      tqlQuery: String
+  ): F[java.util.stream.Stream[ConceptMap]] =
+    Sync[F]
+      .blocking(readTransaction.query().`match`(TypeQL.parseQuery[TypeQLMatch](tqlQuery)))
+      .adaptError(TypeDBQueryException(_))
 
 }

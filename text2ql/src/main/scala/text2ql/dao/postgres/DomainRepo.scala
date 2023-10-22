@@ -4,11 +4,11 @@ import cats.effect.{Async, Resource}
 import cats.implicits._
 import fs2.Stream
 import org.typelevel.log4cats.Logger
-import text2ql.api.{AskRepoResponse, DataForDBQuery, GridPropertyFilterValue}
+import text2ql.api.{AskRepoResponse, DataForDBQuery, GridPropertyValue}
 
 trait DomainRepo[F[_]] {
   def generalQuery(queryData: DataForDBQuery): F[AskRepoResponse]
-  def streamQuery(queryData: DataForDBQuery): F[Stream[F, Map[String, GridPropertyFilterValue]]]
+  def streamQuery(queryData: DataForDBQuery): F[Stream[F, Map[String, GridPropertyValue]]]
 }
 
 object DomainRepo {
@@ -36,7 +36,7 @@ class DomainRepoImpl[F[_]: Async: Logger](
     res              <- responseBuilder.buildResponse(queryData, buildQueryDTO, generalQueryDTO, countDTO)
   } yield res
 
-  override def streamQuery(queryData: DataForDBQuery): F[Stream[F, Map[String, GridPropertyFilterValue]]] = for {
+  override def streamQuery(queryData: DataForDBQuery): F[Stream[F, Map[String, GridPropertyValue]]] = for {
     constantSqlChunk <- qb.buildConstantSqlChunk(queryData)
     query            <- qb.buildGeneralSqlQuery(queryData, constantSqlChunk).map(_.generalQuery)
     props            <- responseBuilder.makeGridProperties(queryData)

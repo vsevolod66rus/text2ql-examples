@@ -233,7 +233,7 @@ class QueryBuilderImpl[F[_]: Sync](
     sqlName     = if (attrType == "datetime") s"$sqlNameRaw::date" else sqlNameRaw
     value       = if (List("string", "datetime").contains(attrType)) s"'${attribute.value}'" else s"${attribute.value}"
     chunk       =
-      if (GridPropertyFilterValue.nullValueDescription == value) s"$sqlName is null"
+      if (GridPropertyValue.nullValueDescription == value) s"$sqlName is null"
       else s"$sqlName ${attribute.comparisonOperator} $value"
   } yield chunk
 

@@ -197,6 +197,11 @@ attributes:
     attribute_type: datetime
     attribute_value: hired_date
     title: Дата найма сотрудника
+  - vertex_name: employee
+    attribute_name: employee_fired_date
+    attribute_type: datetime
+    attribute_value: fired_date
+    title: Дата увольнения сотрудника
 edges:
   - from: region
     to: city

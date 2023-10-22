@@ -46,7 +46,7 @@ object DomainSchema {
       makeMapFromAttrs(a => a.attributeName -> a.title) ++
       makeMapFromThings(th => th.vertexName -> th.title)
 
-    lazy val sqlNames: Map[String, String] = makeMapFromAttrs(a => a.attributeName -> a.attributeValue)
+    lazy val sqlNames: Map[String, String]           = makeMapFromAttrs(a => a.attributeName -> a.attributeValue)
 
     lazy val edges: List[DomainSchemaEdge] = domainSchemaDTO.edges
 
@@ -78,7 +78,7 @@ object DomainSchema {
     private def makeMapFromAttrsWithOption[K, V](f: DomainSchemaAttribute => (K, Option[V])): Map[K, V] =
       domainSchemaDTO.attributes.map(f).collect { case (key, Some(value)) => (key, value) }.toMap
 
-    private def makeMapFromThingsWithOption[K, V](f: DomainSchemaVertex => (K, Option[V])): Map[K, V] =
+    private def makeMapFromThingsWithOption[K, V](f: DomainSchemaVertex => (K, Option[V])): Map[K, V]   =
       domainSchemaDTO.vertices.map(f).collect { case (key, Some(value)) => (key, value) }.toMap
 
   }
