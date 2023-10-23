@@ -6,10 +6,10 @@ import sttp.capabilities.fs2.Fs2Streams
 import sttp.tapir._
 import sttp.tapir.json.circe.jsonBody
 import sttp.tapir.server.interceptor.decodefailure.DefaultDecodeFailureHandler.OnDecodeFailure.RichEndpointTransput
-import text2ql.{Controller, EndpointError, WSEndpoint, baseEndpoint}
 import text2ql.api.Domain
 import text2ql.domainschema.CheckDomainSchemaResponse
 import text2ql.service.{DomainSchemaChecker, DomainSchemaService}
+import text2ql.{Controller, EndpointError, WSEndpoint, baseEndpoint}
 
 import java.nio.charset.StandardCharsets
 

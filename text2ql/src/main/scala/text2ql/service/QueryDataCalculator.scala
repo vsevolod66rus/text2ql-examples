@@ -44,17 +44,7 @@ class QueryDataCalculatorImpl[F[+_]: Async](
                               pagination = userRequest.some,
                               domain = domain
                             )
-      nonEmptySlots       = clarifiedEntities
-                              .map(_.tag)
-                              .filterNot(slotsDoNotClarify.contains)
-                              .filterNot(functionEntities.contains)
-                              .distinct
-                              .sortWith { (s1, s2) =>
-                                val p1 = attributesPriorityForQueryDataCalculating.getOrElse(s1, Int.MaxValue)
-                                val p2 = attributesPriorityForQueryDataCalculating.getOrElse(s2, Int.MaxValue)
-                                p1 <= p2
-                              }
-                              .sortBy(s => !clarifiedEntities.filter(_.isTarget).map(_.tag).contains(s))
+      nonEmptySlots       = clarifiedEntities.map(_.tag).filterNot(functionEntities.contains)
       dataForQuery       <-
         nonEmptySlots.foldLeftM(initialDataForQuery) { (acc, el) =>
           updater.updateDataForDBQuery(acc, clarifiedEntities, domain, el)

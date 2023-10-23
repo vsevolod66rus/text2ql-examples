@@ -7,7 +7,6 @@ import text2ql.api.Domain
 import text2ql.domainschema.{DomainSchemaAttribute, DomainSchemaDTO, DomainSchemaEdge, DomainSchemaVertex}
 import text2ql.error.ServerError.ServerErrorWithMessage
 import text2ql.service.DomainSchema.DomainSchemaInternal
-import text2ql.service.DomainSchemaService.defaultAttributesTitle
 
 trait DomainSchema[F[_]] {
   def update(domainSchema: String): F[Unit]
@@ -42,11 +41,11 @@ object DomainSchema {
 
     lazy val attributesTypeMap: Map[String, String] = makeMapFromAttrs(a => a.attributeName -> a.attributeType)
 
-    lazy val attributesTitleMap: Map[String, String] = defaultAttributesTitle ++
+    lazy val attributesTitleMap: Map[String, String] =
       makeMapFromAttrs(a => a.attributeName -> a.title) ++
       makeMapFromThings(th => th.vertexName -> th.title)
 
-    lazy val sqlNames: Map[String, String]           = makeMapFromAttrs(a => a.attributeName -> a.attributeValue)
+    lazy val sqlNames: Map[String, String] = makeMapFromAttrs(a => a.attributeName -> a.attributeValue)
 
     lazy val edges: List[DomainSchemaEdge] = domainSchemaDTO.edges
 
@@ -74,12 +73,6 @@ object DomainSchema {
 
     private def makeMapFromAttrs[K, V](f: DomainSchemaAttribute => (K, V)): Map[K, V] =
       domainSchemaDTO.attributes.map(f).toMap
-
-    private def makeMapFromAttrsWithOption[K, V](f: DomainSchemaAttribute => (K, Option[V])): Map[K, V] =
-      domainSchemaDTO.attributes.map(f).collect { case (key, Some(value)) => (key, value) }.toMap
-
-    private def makeMapFromThingsWithOption[K, V](f: DomainSchemaVertex => (K, Option[V])): Map[K, V]   =
-      domainSchemaDTO.vertices.map(f).collect { case (key, Some(value)) => (key, value) }.toMap
 
   }
 }

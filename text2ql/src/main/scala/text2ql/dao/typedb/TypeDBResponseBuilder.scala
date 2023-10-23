@@ -117,7 +117,7 @@ class TypeDBResponseBuilderImpl[F[_]: Sync](domainSchema: DomainSchemaService[F]
                                    GridPropertyItemModel(
                                      key = "количество",
                                      title = s"""Количество экземпяров "$countingTitle"""",
-                                     dataType = GridPropertyDataTypeNumber()
+                                     dataType = GridPropertyDataTypeDouble()
                                    )
                                  ) -> extractedData
     } yield result
@@ -165,7 +165,7 @@ class TypeDBResponseBuilderImpl[F[_]: Sync](domainSchema: DomainSchemaService[F]
                                          Map("id" -> GridPropertyValueString(java.util.UUID.randomUUID().toString)) ++
                                            properties.groupMapReduce(_.key) {
                                              case prop if prop.key == "количество" =>
-                                               GridPropertyValueNumber(value.size.toDouble)
+                                               GridPropertyValueDouble(value.size.toDouble)
                                              case _                                =>
                                                GridPropertyValueString(value.headOption.map(_.headlineValue).getOrElse(key))
                                            }((_, v) => v)

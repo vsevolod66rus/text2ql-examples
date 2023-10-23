@@ -21,21 +21,18 @@ class UserRequestTypeCalculatorImpl[F[+_]: Sync](domainSchema: DomainSchemaServi
 
   def calculateDBQueryProperties(entities: List[ClarifiedNamedEntity], domain: Domain): F[AggregationLogic] = for {
     attributeTypesMap <- domainSchema.schemaAttributesType(domain)
-    extremumOpt        = entities.find(_.tag == EXTREMUM)
-    statsOpt           = entities.find(_.tag == STATS)
     chartOpt           = entities.find(_.tag == CHART)
-    argumentOpt        = entities.find(_.role.contains(ARGUMENT))
     targetOpt          = entities.find(_.isTarget)
-    res               <- (extremumOpt, statsOpt, chartOpt, argumentOpt, targetOpt) match {
-                           case (None, None, Some(_), Some(_), Some(_)) =>
+    res               <- (chartOpt, targetOpt) match {
+                           case (Some(_), Some(_)) =>
                              buildGetInstanceListProperties(
                                entities,
                                domain,
                                targetOpt,
-                               argumentOpt,
+                               None,
                                UserRequestType.CountInstancesInGroups
                              )
-                           case _                                       =>
+                           case _                  =>
                              buildGetInstanceListProperties(
                                entities,
                                domain,

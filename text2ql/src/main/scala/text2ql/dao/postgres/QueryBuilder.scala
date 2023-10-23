@@ -232,9 +232,7 @@ class QueryBuilderImpl[F[_]: Sync](
     attrType    = attrsTypes.getOrElse(attributeQuery.attributeName, "string")
     sqlName     = if (attrType == "datetime") s"$sqlNameRaw::date" else sqlNameRaw
     value       = if (List("string", "datetime").contains(attrType)) s"'${attribute.value}'" else s"${attribute.value}"
-    chunk       =
-      if (GridPropertyValue.nullValueDescription == value) s"$sqlName is null"
-      else s"$sqlName ${attribute.comparisonOperator} $value"
+    chunk       = s"$sqlName ${attribute.comparisonOperator} $value"
   } yield chunk
 
   @tailrec

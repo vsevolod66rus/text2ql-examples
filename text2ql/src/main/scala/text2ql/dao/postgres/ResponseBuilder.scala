@@ -121,7 +121,7 @@ class ResponseBuilderImpl[F[_]: Async](
     GridPropertyItemModel(
       key = "counting",
       title = s"""Количество экземпяров "$countingTitle"""",
-      dataType = GridPropertyDataTypeNumber()
+      dataType = GridPropertyDataTypeDouble()
     )
   )
 

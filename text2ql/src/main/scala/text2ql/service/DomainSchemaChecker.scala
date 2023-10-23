@@ -7,13 +7,7 @@ import org.typelevel.log4cats.Logger
 import text2ql.api._
 import text2ql.configs.{DBDataConfig, TypeDBConfig}
 import text2ql.domainschema.CheckDomainSchemaResponse
-import text2ql.dao.typedb.{
-  TypeDBDomainRepo,
-  TypeDBQueryBuilder,
-  TypeDBQueryManager,
-  TypeDBResponseBuilder,
-  TypeDBTransactionManager
-}
+import text2ql.dao.typedb._
 import text2ql.dao.postgres.{DomainRepo, QueryBuilder, QueryManager, ResponseBuilder}
 import text2ql.service.DomainSchemaService._
 

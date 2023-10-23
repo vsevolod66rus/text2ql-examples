@@ -80,7 +80,7 @@ final class TypeDBQueryManagerImpl[F[_]: Sync: Logger](
             val items = groupItems.map { case (key, value) =>
               Map("id" -> GridPropertyValueString(java.util.UUID.randomUUID().toString)) ++
                 properties.groupMapReduce(_.key) {
-                  case prop if prop.key == "количество" => GridPropertyValueNumber(value.size.toDouble)
+                  case prop if prop.key == "количество" => GridPropertyValueDouble(value.size.toDouble)
                   case _                                => GridPropertyValueString(value.headOption.map(_.headlineValue).getOrElse(key))
                 }((_, value) => value)
             }

@@ -32,73 +32,15 @@ object DomainSchemaService {
     domainSchemaHR <- DomainSchema[F](Domain.HR)
   } yield new DomainSchemaServiceImpl(domainSchemaHR)
 
-  val attributesPriorityForQueryDataCalculating: Map[String, Int] = Map(
-    "relation_type"  -> 1,
-    "entity_type"    -> 2,
-    "attribute_type" -> 3
-  )
-
-  val dateAttributes: Set[String] = Set(
-    "date",
-    "year",
-    "month",
-    "day",
-    "weekday",
-    "datetimeTarget"
-  )
-
   val A_TYPE  = "attribute_type"
   val A_VALUE = "attribute_value"
   val E_TYPE  = "entity_type"
   val R_TYPE  = "relation_type"
   val CO      = "comparison_operator"
+  val CHART   = "chart"
 
-  val TARGET      = "target"
-  val AGGREGATION = "aggregation"
-  val ARGUMENT    = "argument"
+  val functionEntities: List[String] = List(CHART, A_VALUE, CO)
 
-  val EXTREMUM = "extremum"
-  val STATS    = "stats"
-  val CHART    = "chart"
-
-  val functionEntities: List[String] = List(EXTREMUM, STATS, CHART)
-
-  val slotsDoNotClarify: List[String] = List(A_VALUE, CO)
-
-  lazy val defaultAttributesTitle: Map[String, String] = Map(
-    "entity_type"         -> "Наименование сущности",
-    "relation_type"       -> "Наименование связи",
-    "attribute_type"      -> "Наименование атрибута",
-    "attribute_value"     -> "Значение атрибута",
-    "comparison_operator" -> "Оператор сравнения",
-    "exist_confirmation"  -> "Подтверждено существование",
-    "metric"              -> "Метрика",
-    "date"                -> "Дата",
-    "day"                 -> "День",
-    "weekday"             -> "День недели",
-    "month"               -> "Месяц",
-    "year"                -> "Год",
-    "from"                -> "С",
-    "to"                  -> "По",
-    "date_unit"           -> "Атрибут даты",
-    "counting"            -> "Количество",
-    "percent"             -> "Процент",
-    "aggregation"         -> "Значение",
-    "True"                -> "Да",
-    "False"               -> "Нет",
-    "true"                -> "Да",
-    "false"               -> "Нет",
-    "count"               -> "Количество",
-    "extremum"            -> "Минимальное или максимальное",
-    "week"                -> "неделя",
-    "ranking"             -> "рейтинг",
-    "stats"               -> "Статистика",
-    "attribute_stats"     -> "Статистика по атрибуту",
-    "max"                 -> "Максимальное",
-    "min"                 -> "Минимальное",
-    "chart"               -> "Диаграмма",
-    "bar"                 -> "Столбчатая диаграмма"
-  )
 }
 
 class DomainSchemaServiceImpl[F[_]: Async](
