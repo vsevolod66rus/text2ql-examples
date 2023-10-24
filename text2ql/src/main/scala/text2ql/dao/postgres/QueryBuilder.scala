@@ -6,9 +6,7 @@ import text2ql.api._
 import text2ql.configs.DBDataConfig
 import text2ql.domainschema.DomainSchemaEdge
 import text2ql.service.DomainSchemaService
-import text2ql.service.DomainSchemaService._
 
-import java.util.UUID
 import scala.annotation.tailrec
 
 trait QueryBuilder[F[_]] {
@@ -33,7 +31,7 @@ class QueryBuilderImpl[F[_]: Sync](
   override def buildConstantSqlChunk(queryData: DataForDBQuery): F[String] = for {
     edges       <- domainSchema.edges(queryData.domain)
     targetEntity = queryData.entityList.find(_.isTargetEntity)
-    pe          <- targetEntity.fold("".pure[F])(e => bfs("".pure[F], List(e), Set.empty[String], queryData, edges))
+    query       <- targetEntity.fold("".pure[F])(e => bfs("".pure[F], List(e), Set.empty[String], queryData, edges))
     attributes   =
       queryData.entityList.flatMap(e => e.attributes.map((e.entityName, _))) ++
         queryData.relationList.flatMap(r => r.attributes.map((r.relationName, _)))
@@ -41,16 +39,12 @@ class QueryBuilderImpl[F[_]: Sync](
                      .filter { case (_, attr) => attr.attributeValues.nonEmpty }
                      .traverse { case (thing, attr) => buildFiltersChunk(queryData.domain, thing)(attr) }
     filtersChunk =
-      filters.filter(_.nonEmpty).mkString(" AND ").some.filter(_.nonEmpty).map("WHERE " + _).fold("")(identity)
-  } yield List("FROM", pe, filtersChunk).mkString(" ")
+      filters.filter(_.nonEmpty).mkString(" and ").some.filter(_.nonEmpty).map("where " + _).fold("")(identity)
+  } yield List("from", query, filtersChunk).mkString(" ")
 
   def buildGeneralSqlQuery(queryData: DataForDBQuery, constantSqlChunk: String): F[BuildQueryDTO] =
-    if (queryData.logic.unique) buildSqlForTable(queryData, constantSqlChunk)
-    else buildSqlForChart(queryData, constantSqlChunk)
-
-  private def buildSqlForTable(queryData: DataForDBQuery, constantSqlChunk: String): F[BuildQueryDTO] =
     for {
-      visualization          <- queryData.logic.visualization.pure[F]
+      visualization          <- queryData.properties.visualization.pure[F]
       attributesForMainSelect =
         filterIncludeSelectAttributes(queryData)
           .filter { case (_, attribute) => visualization.tags.contains(attribute.attributeName) }
@@ -60,77 +54,28 @@ class QueryBuilderImpl[F[_]: Sync](
       query                   = s"$mainSelect $constantSqlChunk $orderBy"
       generalQuery            = withPagination(query, queryData.pagination)
       countTargetChunk       <- buildCountTargetChunk(queryData)
-      countQuery              = buildCountQuery(constantSqlChunk, countTargetChunk, None)
+      countQuery              = s"select count(*), $countTargetChunk $constantSqlChunk"
     } yield BuildQueryDTO(
       generalQuery = generalQuery,
-      countQuery = countQuery,
-      aggregation = false
+      countQuery = countQuery
     )
-
-  private def buildSqlForChart(queryData: DataForDBQuery, constantSqlChunk: String): F[BuildQueryDTO] = for {
-    keys                  <- domainSchema.thingKeys(queryData.domain)
-    countingChunk         <-
-      buildChunkFromLogicAttrs(queryData.logic.targetAttr, queryData.logic.targetThing, queryData.domain).map { c =>
-        if (queryData.logic.targetThing == queryData.logic.groupByThing) c else s"distinct $c"
-      }
-    aggregationChunk      <- buildChunkFromLogicAttrs(
-                               queryData.logic.groupByAttr,
-                               queryData.logic.groupByThing,
-                               queryData.domain
-                             )
-    aggregationKey         =
-      keys.getOrElse(queryData.logic.groupByThing, s"no key for ${queryData.logic.groupByThing}")
-    idChunkCondition       = queryData.logic.groupByAttr == queryData.logic.groupByThing
-    idChunk               <- if (idChunkCondition)
-                               buildThingIdChunk(aggregationKey, queryData.logic.groupByThing, queryData.domain)
-                             else "".pure[F]
-    groupByChunk           = if (idChunkCondition) "GROUP BY aggregation, thing_id" else "GROUP BY aggregation"
-    percentChunk           = s"count($countingChunk) * 100.0 / sum(count(*)) over () as percent"
-    countOrSum             = "count"
-    sortDirection          =
-      queryData.logic.sortModelOpt.flatMap(_.direction).fold[SortDirection](SortDirection.desc)(identity).entryName
-    query                  =
-      s"$countOrSum($countingChunk) as counting, $percentChunk, $aggregationChunk as aggregation $idChunk $constantSqlChunk " +
-        s"$groupByChunk ORDER BY counting $sortDirection"
-    generalQuery           = withPagination(query, queryData.pagination)
-    queryCountTargetChunk <- buildCountTargetChunk(queryData)
-    countQuery             =
-      buildCountQuery(
-        constantSqlChunk,
-        queryCountTargetChunk,
-        aggregationChunk.some
-      )
-  } yield BuildQueryDTO(
-    generalQuery = generalQuery,
-    countQuery = countQuery,
-    aggregation = true
-  )
 
   private def withPagination(query: String, pagination: Option[ChatMessageRequestModel]): String = {
 
-    def fixedWithCursorBasedPagination(offset: Int, limit: Int): String =
-      s"SELECT * FROM (SELECT row_number() over() as cursor, * FROM (SELECT $query)" +
+    def withCursorBasedPagination(offset: Int, limit: Int): String =
+      s"select * from (select row_number() over() as cursor, * from (select $query)" +
         s" as sorted_res) as res where res.cursor > $offset and res.cursor < ${offset + limit + 1};"
 
-    def withOffsetLimit(offset: Int, limit: Int): String = s"SELECT $query LIMIT $limit OFFSET $offset;"
+    def withOffsetLimit(offset: Int, limit: Int): String = s"select $query limit $limit offset $offset;"
 
     val limitOpt  = pagination.flatMap(_.perPage)
     val offsetOpt = pagination.flatMap(_.page).flatMap(o => limitOpt.map(_ * o))
     (offsetOpt, limitOpt) match {
-      case (Some(o), Some(l)) if dataConf.useCursor => fixedWithCursorBasedPagination(o, l)
+      case (Some(o), Some(l)) if dataConf.useCursor => withCursorBasedPagination(o, l)
       case (Some(o), Some(l))                       => withOffsetLimit(o, l)
-      case _                                        => s"SELECT $query;"
+      case _                                        => s"select $query;"
     }
   }
-
-  private def buildChunkFromLogicAttrs(attr: String, thing: String, domain: Domain): F[String] =
-    for {
-      sqlName <- domainSchema.sqlNames(domain, attr)
-      chunk    = s"${thing.toUpperCase}.$sqlName"
-    } yield chunk
-
-  private def buildThingIdChunk(attr: String, thing: String, domain: Domain): F[String] =
-    buildChunkFromLogicAttrs(attr, thing, domain).map(name => s", $name as thing_id")
 
   private def buildOrderByChunk(queryData: DataForDBQuery): String =
     queryData.pagination
@@ -144,23 +89,13 @@ class QueryBuilderImpl[F[_]: Sync](
         s"order by ${sortModel.orderBy.getOrElse("orderBy")} ${sortModel.direction.getOrElse("sortDirection")}"
       }
 
-  private def buildCountQuery(
-      constantSqlChunk: String,
-      countTargetChunk: String,
-      aggregationChunk: Option[String]
-  ): String = aggregationChunk match {
-    case Some(aggregation) =>
-      s"select count(*), $countTargetChunk, count(distinct $aggregation) $constantSqlChunk;"
-    case _                 => s"select count(*), $countTargetChunk $constantSqlChunk"
-  }
-
   private def buildCountTargetChunk(queryData: DataForDBQuery): F[String] = {
-    val targetThing = queryData.logic.targetThing
+    val targetThing = queryData.properties.targetThing
     for {
       distinctKey  <- domainSchema.thingKeys(queryData.domain).map(_.getOrElse(targetThing, targetThing))
       sqlNameKey   <- domainSchema.sqlNames(queryData.domain, distinctKey)
       distinctThing = s"${targetThing.toUpperCase}.$sqlNameKey"
-    } yield s"COUNT(DISTINCT $distinctThing)"
+    } yield s"count(distinct $distinctThing)"
   }
 
   private def filterIncludeSelectAttributes(queryData: DataForDBQuery): List[(String, AttributeForDBQuery)] = {
@@ -214,7 +149,7 @@ class QueryBuilderImpl[F[_]: Sync](
                        .map(name => s"${thingName.toUpperCase}.$name")
       eitherOrAnd <- Sync[F].delay {
                        val isOrExists = attributeQuery.attributeValues.headOption.exists(_.joinValuesWithOr)
-                       if (isOrExists) "OR" else "AND"
+                       if (isOrExists) "or" else "and"
                      }
       attrs       <- attributeQuery.attributeValues
                        .traverse(buildAttributeFilter(domain, attributeQuery, name))

@@ -40,7 +40,7 @@ class QueryDataCalculatorImpl[F[+_]: Async](
                               requestId = requestId,
                               entityList = List.empty[EntityForDBQuery],
                               relationList = List.empty[RelationForDBQuery],
-                              logic = reqProperties,
+                              properties = reqProperties,
                               pagination = userRequest.some,
                               domain = domain
                             )
@@ -56,15 +56,15 @@ class QueryDataCalculatorImpl[F[+_]: Async](
       queryData: DataForDBQuery,
       nAttributesLimit: Int = 50
   ): DataForDBQuery = {
-    val visualization = if (queryData.logic.unique) {
+    val visualization = {
       val visualization =
         List(
           queryData.entityList.flatMap(_.attributes),
           queryData.relationList.flatMap(_.attributes)
         ).flatten.map(_.attributeName)
       TagsVisualization(tags = visualization.take(nAttributesLimit))
-    } else TagsVisualization()
-    val updatedLogic  = queryData.logic.copy(visualization = visualization)
-    queryData.copy(logic = updatedLogic)
+    }
+    val updatedLogic  = queryData.properties.copy(visualization = visualization)
+    queryData.copy(properties = updatedLogic)
   }
 }

@@ -170,8 +170,7 @@ class DomainSchemaCheckerImpl[F[+_]: Async](
         relations,
         BuildQueryDTO(
           generalQuery = resp.toOption.flatMap(_.query).getOrElse(""),
-          countQuery = resp.toOption.map(_.count.query).getOrElse(""),
-          aggregation = false
+          countQuery = resp.toOption.map(_.count.query).getOrElse("")
         ),
         res
       )

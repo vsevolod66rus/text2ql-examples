@@ -7,9 +7,9 @@ import fs2.Stream
 import org.typelevel.log4cats.Logger
 import retry.RetryDetails._
 import retry._
-import text2ql.api.{AggregationLogic, AskRepoResponse, DataForDBQuery, Domain, GridPropertyValue}
+import text2ql.api.{AskRepoResponse, DBQueryProperties, DataForDBQuery, Domain, GridPropertyValue}
 import text2ql.configs.TypeDBConfig
-import text2ql.error.ServerError.{TypeDBConnectionsLimitExceeded, TypeDBQueryException}
+import text2ql.error.ServerError.TypeDBConnectionsLimitExceeded
 
 import scala.concurrent.duration._
 
@@ -19,7 +19,7 @@ trait TypeDBDomainRepo[F[_]] {
 
   def typeDbStreamQuery(
       queryData: DataForDBQuery,
-      logic: AggregationLogic,
+      logic: DBQueryProperties,
       domain: Domain
   ): F[Stream[F, Map[String, GridPropertyValue]]]
 }
@@ -46,7 +46,7 @@ class TypeDBDomainRepoImpl[F[+_]: Async: Logger](
 
   def generalTypeDBQueryWithPermitAndRetry(queryData: DataForDBQuery): F[AskRepoResponse] = retryOnSomeErrors(
     semaphore.tryAcquire.ifM(
-      semaphore.count.flatMap(c => Logger[F].info(s"typeDB semaphore count = $c, query = general")) >>
+      semaphore.count.flatMap(c => Logger[F].info(s"typeDB semaphore count = $c")) >>
         Async[F].guarantee(
           queryManager.generalQuery(queryData),
           semaphore.release
@@ -57,7 +57,7 @@ class TypeDBDomainRepoImpl[F[+_]: Async: Logger](
 
   def typeDbStreamQuery(
       queryData: DataForDBQuery,
-      logic: AggregationLogic,
+      logic: DBQueryProperties,
       domain: Domain
   ): F[Stream[F, Map[String, GridPropertyValue]]] = Async[F].delay {
     for {
@@ -86,12 +86,8 @@ class TypeDBDomainRepoImpl[F[+_]: Async: Logger](
 
   private def checkRetryError(err: Throwable): F[Boolean] = Async[F].pure {
     err match {
-      case e if e.getMessage == null                                     => false
-      case TypeDBConnectionsLimitExceeded                                => true
-      case e if e.toString.contains("Invalid Session Operation")         => true
-      case e if e.getMessage.contains("The session has been closed")     => true
-      case e if e.getMessage.contains("The transaction has been closed") => true
-      case _                                                             => false
+      case TypeDBConnectionsLimitExceeded => true
+      case _                              => false
     }
   }
 

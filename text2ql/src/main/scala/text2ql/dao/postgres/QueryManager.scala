@@ -17,8 +17,8 @@ import scala.annotation.tailrec
 trait QueryManager[F[_]] {
   // case class GeneralQueryDTO(headers: Vector[String], data: List[Vector[String]])
   def getGeneralQueryDTO(queryStr: String): F[GeneralQueryDTO]
-  def getCount(buildQueryDTO: BuildQueryDTO, domain: Domain): F[CountQueryDTO]
   def getGenericPgRowStream(query: String, chunkSize: Int = 256): Stream[F, GenericPgRow]
+  def getCount(buildQueryDTO: BuildQueryDTO): F[CountQueryDTO]
 }
 
 object QueryManager {
@@ -37,13 +37,6 @@ class QueryManagerImpl[F[_]: Sync: Logger](
 
   override def getGeneralQueryDTO(queryStr: String): F[GeneralQueryDTO] =
     Fragment(queryStr, List.empty).execWith(exec).transact(xaStorage)
-
-  override def getCount(buildQueryDTO: BuildQueryDTO, domain: Domain): F[CountQueryDTO] = {
-    val queryHash = buildQueryDTO.countQuery.hashCode
-    for {
-      res <- insertCountQueryHash(buildQueryDTO.countQuery, queryHash, domain, buildQueryDTO.aggregation)
-    } yield res
-  }
 
   private def exec: PreparedStatementIO[GeneralQueryDTO] =
     for {
@@ -106,22 +99,15 @@ class QueryManagerImpl[F[_]: Sync: Logger](
 
   }
 
-  private def insertCountQueryHash(query: String, hash: Int, domain: Domain, aggregation: Boolean): F[CountQueryDTO] =
+  override def getCount(buildQueryDTO: BuildQueryDTO): F[CountQueryDTO] =
     for {
-      _            <- Logger[F].info(s"try new count query: $query")
-      fr            = Fragment(query, List.empty)
-      count        <- Sync[F].blocking {
-                        if (aggregation) fr.query[CountQueryResult].unique.transact(xaStorage)
-                        else fr.query[CountQueryResultUnique].unique.transact(xaStorage).map(_.toCountQueryResult)
-                      }.flatten
+      _            <- Logger[F].info(s"try new count query: ${buildQueryDTO.countQuery}")
+      fr            = Fragment(buildQueryDTO.countQuery, List.empty)
+      count        <- fr.query[CountQueryResultUnique].unique.transact(xaStorage)
       countQueryDTO = CountQueryDTO(
-                        hash = hash,
-                        domain = domain,
                         countRecords = count.countRecords,
                         countTarget = count.countTarget,
-                        countGroups = count.countGroups,
-                        query = query,
-                        numberOfUses = 0
+                        query = buildQueryDTO.countQuery
                       )
     } yield countQueryDTO
 

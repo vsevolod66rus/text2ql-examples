@@ -3,7 +3,7 @@ package text2ql.api
 import io.circe.Codec
 import io.circe.generic.semiauto.deriveCodec
 import sttp.tapir.Schema
-import text2ql.domainschema.{DomainSchemaAttribute, DomainSchemaVertex}
+import text2ql.domainschema.DomainSchemaVertex
 
 import java.util.UUID
 
@@ -13,7 +13,7 @@ case class DataForDBQuery(
     entityList: List[EntityForDBQuery],
     relationList: List[RelationForDBQuery],
     pagination: Option[ChatMessageRequestModel] = None,
-    logic: AggregationLogic
+    properties: DBQueryProperties
 )
 
 case class EntityForDBQuery(
@@ -51,12 +51,9 @@ case class ExtractedDataForAggregation(
     headlineValue: String
 )
 
-case class AggregationLogic(
-    unique: Boolean,
+case class DBQueryProperties(
     targetAttr: String,
     targetThing: String,
-    groupByAttr: String,
-    groupByThing: String,
     sortModelOpt: Option[BaseSortModel],
     visualization: TagsVisualization = TagsVisualization()
 )
@@ -90,9 +87,9 @@ object AttributeValue {
   implicit val schema: Schema[AttributeValue] = Schema.derived
 }
 
-object AggregationLogic {
-  implicit val codec: Codec[AggregationLogic]   = deriveCodec
-  implicit val schema: Schema[AggregationLogic] = Schema.derived
+object DBQueryProperties {
+  implicit val codec: Codec[DBQueryProperties]   = deriveCodec
+  implicit val schema: Schema[DBQueryProperties] = Schema.derived
 }
 
 object TagsVisualization {

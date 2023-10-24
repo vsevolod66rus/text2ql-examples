@@ -2,14 +2,14 @@ package text2ql.dao.typedb
 
 import cats.effect.kernel._
 import cats.implicits._
-import text2ql.api.{AggregationLogic, DataForDBQuery, Domain, RelationForDBQuery}
+import text2ql.api.{DBQueryProperties, DataForDBQuery, Domain, RelationForDBQuery}
 import text2ql.service.DomainSchemaService
 
 trait TypeDBQueryBuilder[F[_]] {
 
   def build(
       queryData: DataForDBQuery,
-      logic: AggregationLogic,
+      logic: DBQueryProperties,
       unlimitedQuery: Boolean,
       configLimit: Int,
       domain: Domain,
@@ -34,7 +34,7 @@ class TypeDBQueryBuilderImpl[F[_]: Sync](queryHelper: TypeDBResponseBuilder[F], 
 
   def build(
       queryDataRaw: DataForDBQuery,
-      logic: AggregationLogic,
+      logic: DBQueryProperties,
       unlimitedQuery: Boolean,
       configLimit: Int,
       domain: Domain,
@@ -44,7 +44,7 @@ class TypeDBQueryBuilderImpl[F[_]: Sync](queryHelper: TypeDBResponseBuilder[F], 
     val queryData                  = addRelations(queryDataRaw)
     val headlines                  = queryData.entityList.map(_.schema.header)
     val attributesToIncludeToQuery =
-      if (countQuery) Seq.empty[String] else logic.groupByAttr +: logic.visualization.tags :++ headlines
+      if (countQuery) Seq.empty[String] else logic.visualization.tags :++ headlines
 
     val entityClauseF = queryData.entityList.foldLeftM("match ") { (query, entity) =>
       for {
@@ -94,16 +94,13 @@ class TypeDBQueryBuilderImpl[F[_]: Sync](queryHelper: TypeDBResponseBuilder[F], 
     }.distinct.map(s => s"$$$s").mkString(", ") + ";"
     val offsetClause    =
       if (unlimitedQuery) ""
-      else if (logic.unique)
+      else
         queryData.pagination
           .flatMap(_.page)
           .fold("")(page => s"offset ${page * queryData.pagination.flatMap(_.perPage).getOrElse(configLimit)};")
-      else ""
     val limitClause     =
       if (unlimitedQuery) ""
-      else if (logic.unique)
-        queryData.pagination.flatMap(_.perPage).fold(s"limit $configLimit;")(limit => s"limit $limit;")
-      else ""
+      else queryData.pagination.flatMap(_.perPage).fold(s"limit $configLimit;")(limit => s"limit $limit;")
 
     for {
       entityClause   <- entityClauseF

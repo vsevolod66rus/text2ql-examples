@@ -21,7 +21,7 @@ trait TypeDBQueryManager[F[_]] {
 
   def streamQuery(
       queryData: DataForDBQuery,
-      logic: AggregationLogic,
+      logic: DBQueryProperties,
       readTransaction: TypeDBTransaction,
       domain: Domain
   ): F[Stream[F, Map[String, GridPropertyValue]]]
@@ -50,55 +50,36 @@ final class TypeDBQueryManagerImpl[F[_]: Sync: Logger](
 
   override def streamQuery(
       queryData: DataForDBQuery,
-      logic: AggregationLogic,
+      logic: DBQueryProperties,
       readTransaction: TypeDBTransaction,
       domain: Domain
   ): F[Stream[F, Map[String, GridPropertyValue]]] = for {
-    query   <- queryBuilder.build(queryData, logic, unlimitedQuery = true, conf.limit, domain)
-    getQuery = TypeQL.parseQuery[TypeQLMatch](query)
-    _       <- Logger[F].info(s"try typeDB stream Query: $query")
-    iterator = readTransaction.query.`match`(getQuery).iterator()
-
-    isSortable                   = (attribute: String) => !attribute.endsWith("_iid")
-    raw                          = iterator.asScala.toSeq
-    (properties, extractedData) <- queryHelper.makeGridProperties(queryData, raw, logic, domain, isSortable)
-
-    res = if (logic.unique)
-            // left the chunkSize as 1 to be closer to the previous version implementation
-            Stream.fromIterator(iterator = iterator.asScala, chunkSize = 1).map { cm =>
-              Map("id" -> GridPropertyValueString(java.util.UUID.randomUUID().toString)) ++
-                properties.groupMapReduce(_.key) { prop =>
-                  GridPropertyValueString(queryHelper.getCMAttributeStringValue(cm, prop.key))
-                }((_, value) => value)
-            }
-          else {
-            val groupItems = extractedData
-              .groupBy(_.aggregationValue)
-              .toList
-              .sortWith((el1, el2) => el1._2.size > el2._2.size)
-
-            val items = groupItems.map { case (key, value) =>
-              Map("id" -> GridPropertyValueString(java.util.UUID.randomUUID().toString)) ++
-                properties.groupMapReduce(_.key) {
-                  case prop if prop.key == "количество" => GridPropertyValueDouble(value.size.toDouble)
-                  case _                                => GridPropertyValueString(value.headOption.map(_.headlineValue).getOrElse(key))
-                }((_, value) => value)
-            }
-
-            Stream.emits[F, Map[String, GridPropertyValue]](items)
-          }
+    query      <- queryBuilder.build(queryData, logic, unlimitedQuery = true, conf.limit, domain)
+    getQuery    = TypeQL.parseQuery[TypeQLMatch](query)
+    _          <- Logger[F].info(s"try typeDB stream Query: $query")
+    iterator    = readTransaction.query.`match`(getQuery).iterator()
+    raw         = iterator.asScala.toSeq
+    properties <- queryHelper.makeGridProperties(queryData, raw)
+    res         = Stream.fromIterator(iterator = iterator.asScala, chunkSize = 1).map { cm =>
+                    Map("id" -> GridPropertyValueString(java.util.UUID.randomUUID().toString)) ++
+                      properties.groupMapReduce(_.key) { prop =>
+                        GridPropertyValueString(queryHelper.getCMAttributeStringValue(cm, prop.key))
+                      }((_, value) => value)
+                  }
   } yield res
 
   override def generalQuery(queryData: DataForDBQuery): F[AskRepoResponse] = transactionManager
     .read(queryData.domain)
     .use { readTransaction =>
-      val logic  = queryData.logic
+      val logic  = queryData.properties
       val domain = queryData.domain
       val countF = getCount(queryData, logic, readTransaction, domain)
+
       for {
         count <- countF
         query <- queryBuilder.build(queryData, logic, unlimitedQuery = false, conf.limit, domain)
 
+        _           <- Logger[F].info(s"try TQL query: $query")
         queryResult <- typeQLMatchQuery(readTransaction, query).map(_.iterator().asScala.toSeq)
 
         page    = queryData.pagination.flatMap(_.page).getOrElse(0)
@@ -110,7 +91,6 @@ final class TypeDBQueryManagerImpl[F[_]: Sync: Logger](
                       .makeGrid(
                         queryData,
                         queryResult,
-                        logic,
                         count.countRecords,
                         domain,
                         offset,
@@ -129,12 +109,11 @@ final class TypeDBQueryManagerImpl[F[_]: Sync: Logger](
 
   private def getCount(
       queryData: DataForDBQuery,
-      logic: AggregationLogic,
+      logic: DBQueryProperties,
       readTransaction: TypeDBTransaction,
       domain: Domain
   ): F[CountQueryDTO] = {
 
-    val countClause                     = "count;"
     def getQuery(desc: Boolean = false) = queryBuilder.build(
       queryData,
       logic,
@@ -146,52 +125,31 @@ final class TypeDBQueryManagerImpl[F[_]: Sync: Logger](
     )
 
     for {
-      queryCountGeneral <- getQuery().map(_ + countClause)
-      countGeneral      <- getCountQueryResult(queryCountGeneral, domain, readTransaction)
-      queryCountTarget  <- getQuery(desc = true).map(_ + countClause)
-      countTarget       <- getCountQueryResult(queryCountTarget, domain, readTransaction)
+      queryCountGeneral <- getQuery().map(_ + "count;")
+      countGeneral      <- getCountQueryResult(queryCountGeneral, readTransaction)
+      queryCountTarget  <- getQuery(desc = true).map(_ + "count;")
+      countTarget       <- getCountQueryResult(queryCountTarget, readTransaction)
     } yield CountQueryDTO(
-      hash = countGeneral.hash,
-      domain = domain,
       countRecords = countGeneral.countRecords,
       countTarget = countTarget.countRecords.some,
-      countGroups = None,
-      query = countGeneral.query,
-      numberOfUses = countTarget.numberOfUses
+      query = countGeneral.query
     )
   }
 
   private def getCountQueryResult(
       query: String,
-      domain: Domain,
       readTransaction: TypeDBTransaction
-  ): F[CountQueryDTO] = {
-    val queryHash = query.hashCode
+  ): F[CountQueryDTO] =
     for {
-      res <- insertCountQueryHash(query, readTransaction, queryHash, domain)
-    } yield res
-  }
-
-  private def insertCountQueryHash(
-      query: String,
-      readTransaction: TypeDBTransaction,
-      hash: Int,
-      domain: Domain
-  ): F[CountQueryDTO] = for {
-    typeQLQuery <- Sync[F]
-                     .delay(TypeQL.parseQuery[TypeQLMatch.Aggregate](query))
-    countOpt    <- Sync[F].delay(Try(readTransaction.query.`match`(typeQLQuery).get().asLong()).toOption)
-    count       <- Sync[F].fromOption(countOpt, ServerErrorWithMessage("no result: count query error"))
-    countDTO     = CountQueryDTO(
-                     hash = hash,
-                     domain = domain,
-                     countRecords = count,
-                     countTarget = None,
-                     countGroups = None,
-                     query = query,
-                     numberOfUses = 0
-                   )
-  } yield countDTO
+      typeQLQuery <- Sync[F].delay(TypeQL.parseQuery[TypeQLMatch.Aggregate](query))
+      countOpt    <- Sync[F].delay(Try(readTransaction.query.`match`(typeQLQuery).get().asLong()).toOption)
+      count       <- Sync[F].fromOption(countOpt, ServerErrorWithMessage("no result: count query error"))
+      countDTO     = CountQueryDTO(
+                       countRecords = count,
+                       countTarget = None,
+                       query = query
+                     )
+    } yield countDTO
 
   private def typeQLMatchQuery(
       readTransaction: TypeDBTransaction,

@@ -7,7 +7,7 @@ import text2ql.error.ServerError.ServerErrorWithMessage
 import text2ql.service.DomainSchemaService._
 
 trait UserRequestTypeCalculator[F[_]] {
-  def calculateDBQueryProperties(entities: List[ClarifiedNamedEntity], domain: Domain): F[AggregationLogic]
+  def calculateDBQueryProperties(entities: List[ClarifiedNamedEntity], domain: Domain): F[DBQueryProperties]
 }
 
 object UserRequestTypeCalculator {
@@ -19,7 +19,7 @@ object UserRequestTypeCalculator {
 class UserRequestTypeCalculatorImpl[F[+_]: Sync](domainSchema: DomainSchemaService[F])
     extends UserRequestTypeCalculator[F] {
 
-  def calculateDBQueryProperties(entities: List[ClarifiedNamedEntity], domain: Domain): F[AggregationLogic] = for {
+  def calculateDBQueryProperties(entities: List[ClarifiedNamedEntity], domain: Domain): F[DBQueryProperties] = for {
     attributeTypesMap <- domainSchema.schemaAttributesType(domain)
     chartOpt           = entities.find(_.tag == CHART)
     targetOpt          = entities.find(_.isTarget)
@@ -49,20 +49,13 @@ class UserRequestTypeCalculatorImpl[F[+_]: Sync](domainSchema: DomainSchemaServi
       targetOpt: Option[ClarifiedNamedEntity],
       groupByOpt: Option[ClarifiedNamedEntity],
       userRequestType: UserRequestType
-  ): F[AggregationLogic] =
+  ): F[DBQueryProperties] =
     for {
-      unique            <- entities.exists(_.tag == CHART).pure[F].map(!_)
-      targetVertexName  <- getTargetVertexName(targetOpt, domain)
-      targetAttrName    <- getTargetAttrName(targetOpt, domain, isGroupBy = false)
-      groupByVertexName <- if (unique && groupByOpt.isEmpty) "".pure[F] else getTargetVertexName(groupByOpt, domain)
-      groupByAttrName   <-
-        if (unique && groupByOpt.isEmpty) "".pure[F] else getTargetAttrName(groupByOpt, domain, isGroupBy = true)
-    } yield AggregationLogic(
-      unique = unique,
+      targetVertexName <- getTargetVertexName(targetOpt, domain)
+      targetAttrName   <- getTargetAttrName(targetOpt, domain)
+    } yield DBQueryProperties(
       targetAttr = targetAttrName,
       targetThing = targetVertexName,
-      groupByAttr = groupByAttrName,
-      groupByThing = groupByVertexName,
       sortModelOpt = None
     )
 
@@ -82,15 +75,14 @@ class UserRequestTypeCalculatorImpl[F[+_]: Sync](domainSchema: DomainSchemaServi
 
   private def getTargetAttrName(
       targetOpt: Option[ClarifiedNamedEntity],
-      domain: Domain,
-      isGroupBy: Boolean
+      domain: Domain
   ): F[String] = for {
     targetEntity        <- Sync[F].fromOption(targetOpt, ServerErrorWithMessage("no target entity from nlp"))
     targetEntityNameOpt <- targetEntity.tag match {
                              case E_TYPE =>
-                               val namedValue = targetEntity.findFirstNamedValue
-                               if (isGroupBy) namedValue.pure[F]
-                               else namedValue.traverse(v => domainSchema.thingKeys(domain).map(_.getOrElse(v, v)))
+                               targetEntity.findFirstNamedValue.traverse { v =>
+                                 domainSchema.thingKeys(domain).map(_.getOrElse(v, v))
+                               }
                              case _      => targetEntity.findFirstNamedValue.pure[F]
                            }
     targetAttrName      <-

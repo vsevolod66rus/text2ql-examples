@@ -30,7 +30,7 @@ class DomainRepoImpl[F[_]: Async: Logger](
   override def generalQuery(queryData: DataForDBQuery): F[AskRepoResponse] = for {
     constantSqlChunk <- qb.buildConstantSqlChunk(queryData)
     buildQueryDTO    <- qb.buildGeneralSqlQuery(queryData, constantSqlChunk)
-    countDTO         <- qm.getCount(buildQueryDTO, queryData.domain)
+    countDTO         <- qm.getCount(buildQueryDTO)
     _                <- Logger[F].info(s"try SQL: ${buildQueryDTO.generalQuery}")
     generalQueryDTO  <- qm.getGeneralQueryDTO(buildQueryDTO.generalQuery)
     res              <- responseBuilder.buildResponse(queryData, buildQueryDTO, generalQueryDTO, countDTO)
