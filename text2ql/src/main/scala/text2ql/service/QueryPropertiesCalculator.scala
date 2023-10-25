@@ -19,38 +19,9 @@ object UserRequestTypeCalculator {
 class UserRequestTypeCalculatorImpl[F[+_]: Sync](domainSchema: DomainSchemaService[F])
     extends UserRequestTypeCalculator[F] {
 
-  def calculateDBQueryProperties(entities: List[ClarifiedNamedEntity], domain: Domain): F[DBQueryProperties] = for {
-    attributeTypesMap <- domainSchema.schemaAttributesType(domain)
-    chartOpt           = entities.find(_.tag == CHART)
-    targetOpt          = entities.find(_.isTarget)
-    res               <- (chartOpt, targetOpt) match {
-                           case (Some(_), Some(_)) =>
-                             buildGetInstanceListProperties(
-                               entities,
-                               domain,
-                               targetOpt,
-                               None,
-                               UserRequestType.CountInstancesInGroups
-                             )
-                           case _                  =>
-                             buildGetInstanceListProperties(
-                               entities,
-                               domain,
-                               targetOpt,
-                               None,
-                               UserRequestType.GetInstanceList
-                             )
-                         }
-  } yield res
-
-  private def buildGetInstanceListProperties(
-      entities: List[ClarifiedNamedEntity],
-      domain: Domain,
-      targetOpt: Option[ClarifiedNamedEntity],
-      groupByOpt: Option[ClarifiedNamedEntity],
-      userRequestType: UserRequestType
-  ): F[DBQueryProperties] =
+  def calculateDBQueryProperties(entities: List[ClarifiedNamedEntity], domain: Domain): F[DBQueryProperties] =
     for {
+      targetOpt        <- entities.find(_.isTarget).pure[F]
       targetVertexName <- getTargetVertexName(targetOpt, domain)
       targetAttrName   <- getTargetAttrName(targetOpt, domain)
     } yield DBQueryProperties(

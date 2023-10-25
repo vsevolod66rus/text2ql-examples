@@ -4,8 +4,8 @@ import pureconfig.ConfigReader
 import pureconfig.generic.semiauto.deriveReader
 
 case class ServerConfig(
-    host: String = "127.0.0.1",
-    port: Int = 9001
+    host: String,
+    port: Int
 )
 
 object ServerConfig {

@@ -57,7 +57,7 @@ class ResponseBuilderImpl[F[_]: Async](
 
   override def toItem(headers: Vector[String], properties: List[GridPropertyItemModel], domain: Domain)(
       row: Vector[String]
-  ): F[Map[String, GridPropertyValue]] =
+  ): F[Map[String, GridPropertyValue]]         =
     properties
       .traverse(prop => getAttributeValue(headers, prop.key, domain)(row).map(v => prop.key -> v))
       .map(_.groupMapReduce(_._1)(_._2)((_, v) => v))

@@ -12,13 +12,13 @@ trait MigrationService[F[_]] {
 
 object MigrationService {
 
-  def apply[F[_]: Async: Logger](
+  def apply[F[_]: Async](
       migrationRepo: MigrationRepo[F]
   ): Resource[F, MigrationService[F]] =
     Resource.eval(Sync[F].delay(new MigrationServiceImpl(migrationRepo)))
 }
 
-class MigrationServiceImpl[F[_]: Async: Logger](
+class MigrationServiceImpl[F[_]: Async](
     migrationRepo: MigrationRepo[F]
 ) extends MigrationService[F] {
   override def generateEmployees(n: Int): F[Unit] = migrationRepo.generateEmployees(n)

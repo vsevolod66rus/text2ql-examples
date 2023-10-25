@@ -6,8 +6,7 @@ import io.circe.{Codec, Decoder, Encoder}
 import sttp.tapir.Schema
 
 import java.sql.Timestamp
-import java.time.format.DateTimeFormatter
-import java.time.{Instant, LocalDateTime, ZoneId}
+import java.time.Instant
 import scala.util.Try
 
 case class AskResponsePayload(

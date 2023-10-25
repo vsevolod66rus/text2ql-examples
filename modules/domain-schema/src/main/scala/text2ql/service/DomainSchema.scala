@@ -43,9 +43,9 @@ object DomainSchema {
 
     lazy val attributesTitleMap: Map[String, String] =
       makeMapFromAttrs(a => a.attributeName -> a.title) ++
-      makeMapFromThings(th => th.vertexName -> th.title)
+        makeMapFromThings(th => th.vertexName -> th.title)
 
-    lazy val sqlNames: Map[String, String] = makeMapFromAttrs(a => a.attributeName -> a.attributeValue)
+    lazy val sqlNames: Map[String, String]           = makeMapFromAttrs(a => a.attributeName -> a.attributeValue)
 
     lazy val edges: List[DomainSchemaEdge] = domainSchemaDTO.edges
 

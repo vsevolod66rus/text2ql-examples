@@ -4,6 +4,7 @@ import cats.effect.kernel._
 import cats.implicits._
 import text2ql.api.{DBQueryProperties, DataForDBQuery, Domain, RelationForDBQuery}
 import text2ql.service.DomainSchemaService
+import text2ql.service.DomainSchemaService.relationsMap
 
 trait TypeDBQueryBuilder[F[_]] {
 
@@ -120,14 +121,5 @@ class TypeDBQueryBuilderImpl[F[_]: Sync](queryHelper: TypeDBResponseBuilder[F], 
         .toList
     queryData.copy(relationList = relations)
   }
-
-  private val relationsMap = Map(
-    "region_cities"        -> Set("region", "city"),
-    "city_locations"       -> Set("city", "location"),
-    "location_departments" -> Set("location", "department"),
-    "department_employees" -> Set("department", "employee"),
-    "job_employees"        -> Set("job", "employee"),
-    "function_jobs"        -> Set("job_function", "job")
-  )
 
 }

@@ -44,7 +44,7 @@ class QueryDataCalculatorImpl[F[+_]: Async](
                               pagination = userRequest.some,
                               domain = domain
                             )
-      nonEmptySlots       = clarifiedEntities.map(_.tag).filterNot(functionEntities.contains)
+      nonEmptySlots       = clarifiedEntities.map(_.tag)
       dataForQuery       <-
         nonEmptySlots.foldLeftM(initialDataForQuery) { (acc, el) =>
           updater.updateDataForDBQuery(acc, clarifiedEntities, domain, el)
@@ -64,7 +64,7 @@ class QueryDataCalculatorImpl[F[+_]: Async](
         ).flatten.map(_.attributeName)
       TagsVisualization(tags = visualization.take(nAttributesLimit))
     }
-    val updatedLogic  = queryData.properties.copy(visualization = visualization)
+    val updatedLogic = queryData.properties.copy(visualization = visualization)
     queryData.copy(properties = updatedLogic)
   }
 }

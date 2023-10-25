@@ -164,7 +164,7 @@ class DomainSchemaCheckerImpl[F[+_]: Async](
             .attempt
         res       = resp.map(_.custom.flatMap(_.grid).getOrElse(GridWithDataRenderTypeResponseModel())).leftMap(_.toString)
         entities  = queryData.entityList.map(_.entityName)
-        relations = queryData.relationList.map(_.relationName)
+        relations = relationsMap.keySet.toList
       } yield CheckDomainSchemaResponse(
         entities,
         relations,

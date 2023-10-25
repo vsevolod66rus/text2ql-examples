@@ -14,7 +14,7 @@ trait TypeDBTransactionManager[F[_]] {
 object TypeDBTransactionManager {
 
   def apply[F[+_]: Sync](
-      client: TypeDBClient,
+      client: F[TypeDBClient], // пусть полежит внутри F[] - чтобы не поднимать typeDB для старта приложения
       conf: TypeDBConfig
   ): Resource[F, TypeDBTransactionManager[F]] =
     Resource.eval(Sync[F].delay(new TypeDBTransactionManagerImpl(client, conf)))
@@ -22,7 +22,7 @@ object TypeDBTransactionManager {
 }
 
 final class TypeDBTransactionManagerImpl[F[+_]: Sync](
-    client: TypeDBClient,
+    client: F[TypeDBClient],
     conf: TypeDBConfig
 ) extends TypeDBTransactionManager[F] {
 
@@ -36,8 +36,16 @@ final class TypeDBTransactionManagerImpl[F[+_]: Sync](
       Resource.fromAutoCloseable(openTypeDBTransaction(session, TypeDBTransaction.Type.WRITE))
     }
 
+//  private def openTypeDBSession(domain: Domain): Resource[F, TypeDBSession] =
+//    Resource.fromAutoCloseable(getDbName(domain).map(client.session(_, TypeDBSession.Type.DATA)))
+
   private def openTypeDBSession(domain: Domain): Resource[F, TypeDBSession] =
-    Resource.fromAutoCloseable(getDbName(domain).map(client.session(_, TypeDBSession.Type.DATA)))
+    Resource.fromAutoCloseable(
+      for {
+        dbname  <- getDbName(domain)
+        session <- client.map(_.session(dbname, TypeDBSession.Type.DATA))
+      } yield session
+    )
 
   private def openTypeDBTransaction(
       session: TypeDBSession,

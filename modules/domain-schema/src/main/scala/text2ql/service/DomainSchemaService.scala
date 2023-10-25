@@ -32,14 +32,19 @@ object DomainSchemaService {
     domainSchemaHR <- DomainSchema[F](Domain.HR)
   } yield new DomainSchemaServiceImpl(domainSchemaHR)
 
-  val A_TYPE  = "attribute_type"
-  val A_VALUE = "attribute_value"
-  val E_TYPE  = "entity_type"
-  val R_TYPE  = "relation_type"
-  val CO      = "comparison_operator"
-  val CHART   = "chart"
+  val A_TYPE = "attribute_type"
+  val E_TYPE = "entity_type"
+  val R_TYPE = "relation_type"
+  val CO     = "comparison_operator"
 
-  val functionEntities: List[String] = List(CHART, A_VALUE, CO)
+  val relationsMap: Map[String, Set[String]] = Map(
+    "region_cities"        -> Set("region", "city"),
+    "city_locations"       -> Set("city", "location"),
+    "location_departments" -> Set("location", "department"),
+    "department_employees" -> Set("department", "employee"),
+    "job_employees"        -> Set("job", "employee"),
+    "function_jobs"        -> Set("job_function", "job")
+  )
 
 }
 
