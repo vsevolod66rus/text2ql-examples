@@ -14,8 +14,6 @@ case class ClarifiedNamedEntity(
     group: Option[Int] = None,
     isTarget: Boolean = false
 ) {
-  def getFirstNamedValue: String = namedValues.headOption.getOrElse("values field is empty")
-
   def findFirstNamedValue: Option[String] = namedValues.headOption
 
   def filterByTagAndValueOpt: (String, Option[String]) => Boolean = (name, value) =>

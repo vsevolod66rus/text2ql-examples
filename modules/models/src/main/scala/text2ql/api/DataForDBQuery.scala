@@ -46,20 +46,11 @@ case class ThingWithOriginalName(
     thingName: String
 )
 
-case class ExtractedDataForAggregation(
-    aggregationValue: String,
-    headlineValue: String
-)
-
 case class DBQueryProperties(
     targetAttr: String,
     targetThing: String,
     sortModelOpt: Option[BaseSortModel],
-    visualization: TagsVisualization = TagsVisualization()
-)
-
-case class TagsVisualization(
-    tags: List[String] = List.empty[String]
+    visualization: List[String]
 )
 
 object DataForDBQuery {
@@ -90,9 +81,4 @@ object AttributeValue {
 object DBQueryProperties {
   implicit val codec: Codec[DBQueryProperties]   = deriveCodec
   implicit val schema: Schema[DBQueryProperties] = Schema.derived
-}
-
-object TagsVisualization {
-  implicit val codec: Codec[TagsVisualization]   = deriveCodec
-  implicit val schema: Schema[TagsVisualization] = Schema.derived
 }

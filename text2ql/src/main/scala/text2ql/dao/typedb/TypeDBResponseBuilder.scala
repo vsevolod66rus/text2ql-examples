@@ -75,7 +75,7 @@ class TypeDBResponseBuilderImpl[F[_]: Sync](domainSchema: DomainSchemaService[F]
       queryData: DataForDBQuery,
       raw: Seq[ConceptMap]
   ): F[List[GridPropertyItemModel]] =
-    queryData.properties.visualization.tags
+    queryData.properties.visualization
       .traverse { attribute =>
         for {
           attrType <- domainSchema.schemaAttributesType(queryData.domain).map(_.getOrElse(attribute, "string"))

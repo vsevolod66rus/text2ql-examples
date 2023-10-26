@@ -3,7 +3,6 @@ package text2ql.service
 import cats.effect.{Async, Resource}
 import cats.implicits._
 import text2ql.api._
-import text2ql.service.DomainSchemaService._
 
 trait QueryDataCalculator[F[_]] {
 
@@ -62,7 +61,7 @@ class QueryDataCalculatorImpl[F[+_]: Async](
           queryData.entityList.flatMap(_.attributes),
           queryData.relationList.flatMap(_.attributes)
         ).flatten.map(_.attributeName)
-      TagsVisualization(tags = visualization.take(nAttributesLimit))
+      visualization.take(nAttributesLimit)
     }
     val updatedLogic = queryData.properties.copy(visualization = visualization)
     queryData.copy(properties = updatedLogic)

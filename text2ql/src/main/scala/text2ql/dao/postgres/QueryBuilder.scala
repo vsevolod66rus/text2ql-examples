@@ -47,8 +47,7 @@ class QueryBuilderImpl[F[_]: Sync](
       visualization          <- queryData.properties.visualization.pure[F]
       attributesForMainSelect =
         filterIncludeSelectAttributes(queryData)
-          .filter { case (_, attribute) => visualization.tags.contains(attribute.attributeName) }
-          .sortBy { case (_, attribute) => visualization.tags.indexOf(attribute.attributeName) }
+          .filter { case (_, attribute) => visualization.contains(attribute.attributeName) }
       mainSelect             <- collectMainSelect(attributesForMainSelect, queryData.domain)
       orderBy                 = buildOrderByChunk(queryData)
       query                   = s"$mainSelect $constantSqlChunk $orderBy"

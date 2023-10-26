@@ -27,7 +27,8 @@ class UserRequestTypeCalculatorImpl[F[+_]: Sync](domainSchema: DomainSchemaServi
     } yield DBQueryProperties(
       targetAttr = targetAttrName,
       targetThing = targetVertexName,
-      sortModelOpt = None
+      sortModelOpt = None,
+      visualization = List.empty
     )
 
   private def getTargetVertexName(targetOpt: Option[ClarifiedNamedEntity], domain: Domain): F[String] = for {

@@ -45,7 +45,7 @@ class TypeDBQueryBuilderImpl[F[_]: Sync](queryHelper: TypeDBResponseBuilder[F], 
     val queryData                  = addRelations(queryDataRaw)
     val headlines                  = queryData.entityList.map(_.schema.header)
     val attributesToIncludeToQuery =
-      if (countQuery) Seq.empty[String] else logic.visualization.tags :++ headlines
+      if (countQuery) Seq.empty[String] else logic.visualization :++ headlines
 
     val entityClauseF = queryData.entityList.foldLeftM("match ") { (query, entity) =>
       for {

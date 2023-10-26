@@ -79,7 +79,7 @@ object GridPropertyDataType {
   }
 }
 
-object GridPropertyValue extends TimestampCodec {
+object GridPropertyValue {
 
   implicit val encoderGridPropertyValue: Encoder[GridPropertyValue] = Encoder.instance {
     case _ @GridPropertyValueString(string)   => string.asJson

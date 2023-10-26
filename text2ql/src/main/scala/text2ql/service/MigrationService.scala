@@ -1,9 +1,7 @@
 package text2ql.service
 
-import cats.effect.Async
 import cats.effect.kernel._
 import text2ql.dao.MigrationRepo
-import org.typelevel.log4cats.Logger
 
 trait MigrationService[F[_]] {
   def generateEmployees(n: Int): F[Unit]
@@ -12,13 +10,13 @@ trait MigrationService[F[_]] {
 
 object MigrationService {
 
-  def apply[F[_]: Async](
+  def apply[F[_]: Sync](
       migrationRepo: MigrationRepo[F]
   ): Resource[F, MigrationService[F]] =
     Resource.eval(Sync[F].delay(new MigrationServiceImpl(migrationRepo)))
 }
 
-class MigrationServiceImpl[F[_]: Async](
+class MigrationServiceImpl[F[_]](
     migrationRepo: MigrationRepo[F]
 ) extends MigrationService[F] {
   override def generateEmployees(n: Int): F[Unit] = migrationRepo.generateEmployees(n)

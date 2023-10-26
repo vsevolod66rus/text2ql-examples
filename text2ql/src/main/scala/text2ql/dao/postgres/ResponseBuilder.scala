@@ -90,7 +90,7 @@ class ResponseBuilderImpl[F[_]: Async](
   private def buildTableProperties(
       logic: DBQueryProperties,
       domain: Domain
-  ): F[List[GridPropertyItemModel]] = logic.visualization.tags
+  ): F[List[GridPropertyItemModel]] = logic.visualization
     .traverse { attribute =>
       for {
         attrType <- domainSchema.schemaAttributesType(domain).map(_.getOrElse(attribute, "string"))

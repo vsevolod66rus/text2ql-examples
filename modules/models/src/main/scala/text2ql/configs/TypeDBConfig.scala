@@ -6,7 +6,7 @@ import pureconfig.generic.semiauto.deriveReader
 case class TypeDBConfig(
     url: String,
     dbHR: String,
-    rules: Boolean = false,
+    rules: Boolean,
     limit: Int,
     parallel: Boolean,
     transactionTimeoutMillis: Int,

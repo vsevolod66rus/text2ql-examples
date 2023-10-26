@@ -43,11 +43,12 @@ class QueryDataUpdaterImpl[F[+_]: Async](domainSchema: DomainSchemaService[F]) e
       currentDataForQuery: DataForDBQuery,
       clarifiedEntities: List[ClarifiedNamedEntity]
   ): F[DataForDBQuery] = for {
-    entitiesFromSlot <- clarifiedEntities.view
-                          .filter(_.tag == E_TYPE)
-                          .map(e => ThingWithOriginalName(e.originalValue, e.getFirstNamedValue))
-                          .toList
-                          .pure[F]
+    entitiesFromSlot <-
+      clarifiedEntities.view
+        .filter(_.tag == E_TYPE)
+        .map(e => ThingWithOriginalName(e.originalValue, e.namedValues.headOption.getOrElse(e.originalValue)))
+        .toList
+        .pure[F]
     res              <- entitiesFromSlot.foldLeftM(currentDataForQuery)((acc, el) =>
                           chunkUpdateDataForQueryWithEntity(acc, clarifiedEntities, el)
                         )
@@ -231,7 +232,7 @@ class QueryDataUpdaterImpl[F[+_]: Async](domainSchema: DomainSchemaService[F]) e
     clarifiedEntities.view
       .filter(_.filterByGroupOpt(coEntity.group))
       .find(_.filterByTagAndValueOpt(CO, comparisonOperatorOriginal))
-      .map(_.getFirstNamedValue)
+      .flatMap(_.findFirstNamedValue)
       .getOrElse("=")
   }
 
